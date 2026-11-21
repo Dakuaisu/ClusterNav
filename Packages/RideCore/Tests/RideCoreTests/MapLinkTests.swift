@@ -49,6 +49,33 @@ struct MapLinkTests {
         #expect(try #require(place("Pin: 7J4VWHC2+VG see you")).0 > 12)
     }
 
+    @Test func directionsNeverImportTheOriginOrTheMapCentre() throws {
+        #expect(place("https://www.google.com/maps/dir/?api=1&origin=12.9700,77.5900&destination=Airport") == nil,
+                "an unresolvable destination is rejected, not replaced by the origin")
+        #expect(place("Leaving now https://www.google.com/maps/dir/?api=1&origin=12.9700,77.5900&destination=Airport") == nil)
+        let both = try #require(place("https://www.google.com/maps/dir/?api=1&origin=12.9700,77.5900&destination=13.0100,77.5500"))
+        #expect(both.0 == 13.01 && both.1 == 77.55)
+        #expect(place("https://www.google.com/maps/dir/12.9700,77.5900/Airport/@12.99,77.60,12z") == nil)
+        let path = try #require(place("https://www.google.com/maps/dir/12.9700,77.5900/13.0100,77.5500/@12.99,77.57,12z"))
+        #expect(path.0 == 13.01 && path.1 == 77.55, "the last stop of a directions path is the destination")
+        #expect(place("https://www.google.com/maps/dir/12.9700,77.5900/@12.97,77.59,12z") == nil, "a lone stop is an origin")
+        #expect(place("https://www.google.com/maps/search/petrol/@12.9716,77.5946,15z") == nil)
+
+        let apple = try #require(place("https://maps.apple.com/?ll=12.9700,77.5900&daddr=13.0100,77.5500"))
+        #expect(apple.0 == 13.01 && apple.1 == 77.55, "daddr is the destination; ll is the map centre")
+        #expect(place("https://maps.apple.com/?ll=12.9700,77.5900&daddr=Kempegowda%20Airport") == nil)
+        #expect(place("https://maps.apple.com/?q=Coffee&sll=12.9700,77.5900") == nil, "a search centre is not a place")
+    }
+
+    @Test func mistypedCoordinatesAreRejectedNotTruncated() {
+        #expect(place("Meet at 112.9716, 77.5946") == nil)
+        #expect(place("Meet at 12.9716, 1177.5946") == nil)
+        #expect(place("ref 3.12.9716, 77.5946") == nil)
+        #expect(place("Meet at -12.9716, 77.5946")?.0 == -12.9716)
+        #expect(place("Dinner at 12.97160, 77.59460 https://example.com/menu?id=12.3456,77.1234")?.0 == 12.9716,
+                "text beside an unrelated link is still read; the link itself is not")
+    }
+
     @Test func shortLinksNeedExpansion() {
         #expect(MapLinkParser.parse("https://maps.app.goo.gl/AbCdEf123") == .needsExpansion(URL(string: "https://maps.app.goo.gl/AbCdEf123")!))
         #expect(MapLinkParser.parse("check https://goo.gl/maps/xyz") == .needsExpansion(URL(string: "https://goo.gl/maps/xyz")!))

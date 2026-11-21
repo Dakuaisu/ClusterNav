@@ -39,14 +39,19 @@ public enum MapLinkParser {
         for url in urls(in: trimmed) {
             if let result = parse(url: url) { return result }
         }
-        if case .success(let coordinate) = DestinationInputParser.parse(trimmed) {
+        // A link that named no destination is never mined for some other coordinate
+        // (an origin, a map centre): only the words around it are read as plain text.
+        let words = trimmed.split(whereSeparator: \.isWhitespace).filter { url(from: $0) == nil }
+        let plain = words.joined(separator: " ")
+        if case .success(let coordinate) = DestinationInputParser.parse(plain) {
             return .place(coordinate, name: nil)
         }
-        if let match = trimmed.firstMatch(of: /(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/),
+        // Not part of a longer number: "112.9716, 77.5946" is a typo, not 12.9716.
+        if let match = plain.firstMatch(of: /(?:^|[^\d.])(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/),
            let coordinate = coordinate(String(match.1), String(match.2)) {
             return .place(coordinate, name: nil)
         }
-        for token in trimmed.split(whereSeparator: \.isWhitespace) where token.contains("+") {
+        for token in words where token.contains("+") {
             if OpenLocationCode.isFull(String(token)),
                case .success(let coordinate) = DestinationInputParser.parse(String(token)) {
                 return .place(coordinate, name: nil)
@@ -68,7 +73,12 @@ public enum MapLinkParser {
 
         if isAppleMapsHost(host) {
             let name = query["q"].flatMap { coordinateText($0) == nil ? $0 : nil }
-            for key in ["ll", "daddr", "coordinate", "sll", "q"] {
+            // Directions: only the stated destination counts. `ll` is then the map centre.
+            if let destination = query["daddr"] {
+                return coordinateText(destination).map { .place($0, name: name) }
+            }
+            // `sll` is where a search was centred, not a place: never a destination.
+            for key in ["coordinate", "ll", "q"] {
                 if let value = query[key], let coordinate = coordinateText(value) {
                     return .place(coordinate, name: name)
                 }
@@ -77,11 +87,23 @@ public enum MapLinkParser {
         }
 
         if isGoogleHost(host) {
+            // Directions: only the stated destination counts, never the origin, a
+            // waypoint or the camera position.
+            if let destination = query["destination"] ?? query["daddr"] {
+                return coordinateText(destination).map { .place($0, name: nil) }
+            }
+            let path = url.pathComponents
+            if let index = path.firstIndex(of: "dir") {
+                let stops = path[(index + 1)...].filter { !$0.hasPrefix("@") && !$0.hasPrefix("data=") }
+                return stops.count >= 2 ? stops.last.flatMap(coordinateText).map { .place($0, name: nil) } : nil
+            }
+            // A search is centred on the camera, which is not a place either.
+            if path.contains("search"), query["query"].flatMap(coordinateText) == nil { return nil }
             if let match = url.absoluteString.firstMatch(of: /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/),
                let coordinate = coordinate(String(match.1), String(match.2)) {
                 return .place(coordinate, name: googlePlaceName(url))
             }
-            for key in ["destination", "daddr", "q", "query", "ll", "center"] {
+            for key in ["q", "query", "ll", "center"] {
                 if let value = query[key], let coordinate = coordinateText(value) {
                     return .place(coordinate, name: googlePlaceName(url))
                 }
@@ -129,12 +151,14 @@ public enum MapLinkParser {
     }
 
     private static func urls(in text: String) -> [URL] {
-        text.split(whereSeparator: \.isWhitespace).compactMap { token in
-            var candidate = String(token).trimmingCharacters(in: CharacterSet(charactersIn: "<>\"'"))
-            if candidate.hasPrefix("(") { candidate.removeFirst() }
-            if candidate.hasSuffix(")"), !candidate.contains("(") { candidate.removeLast() }
-            guard candidate.hasPrefix("http") || candidate.lowercased().hasPrefix("geo:") else { return nil }
-            return URL(string: candidate)
-        }
+        text.split(whereSeparator: \.isWhitespace).compactMap(url(from:))
+    }
+
+    private static func url(from token: Substring) -> URL? {
+        var candidate = String(token).trimmingCharacters(in: CharacterSet(charactersIn: "<>\"'"))
+        if candidate.hasPrefix("(") { candidate.removeFirst() }
+        if candidate.hasSuffix(")"), !candidate.contains("(") { candidate.removeLast() }
+        guard candidate.hasPrefix("http") || candidate.lowercased().hasPrefix("geo:") else { return nil }
+        return URL(string: candidate)
     }
 }

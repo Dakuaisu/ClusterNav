@@ -219,7 +219,7 @@ public struct FavouritesList: Sendable, Equatable, Codable {
         items.removeAll { $0.id == id }
     }
 
-    static func normalised(_ label: String, fallback: Coordinate) -> String {
+    public static func normalised(_ label: String, fallback: Coordinate) -> String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return String(format: "%.5f, %.5f", fallback.latitude, fallback.longitude)
