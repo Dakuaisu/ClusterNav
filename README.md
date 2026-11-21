@@ -52,9 +52,11 @@ ClusterNav is not affiliated with or endorsed by Bajaj Auto or Apple.
 | **Route choice** | Up to three Apple Maps alternatives from one request, selectable in a list or by tapping the line on the map, with avoid-tolls and avoid-highways options. |
 | **Spoken directions** | Detailed or concise prompts through the helmet, earphones or speaker, with repeat, and a hold when a headset disconnects. |
 | **Destinations from anywhere** | Search, Home and Work shortcuts, favourites and recents, a map long-press, coordinates or plus codes, pasted map links, the share extension, and Siri previews for Home and Work. |
-| **One stop on the way** | Leg one ends at the stop; continuing calculates a fresh route from where the rider is. |
+| **One stop on the way** | Leg one ends at the stop; continuing calculates a fresh route from where the rider is. Fuel and rest stops along the route can be suggested, ranked by the minutes they add. |
+| **Parked route rehearsal** | Step through every turn of the planned route before leaving and hear each cue through the selected headset. |
+| **Ride plans** | Save a destination, its stop and the toll and highway choices together; the route is calculated fresh each time. |
 | **Live Activity** | The current turn on the Lock Screen and Dynamic Island on supported devices. |
-| **Private by default** | Ride history, GPS recaps with GPX export, and ride recovery are each opt-in, stored on the phone only, and excluded from backups. |
+| **Private by default** | Ride history, GPS recaps with GPX export, and ride recovery are each opt-in, stored on the phone only, and excluded from backups. A GPX export can leave out everything within 500 m of the start and end, with a preview of what will be shared. |
 | **Parked bench tools** | A simulation mode, a step-by-step bike compatibility check, a manual checklist and a Bluetooth console for inspecting what the cluster actually does. |
 
 ## How it works
@@ -112,8 +114,11 @@ The [setup guide](docs/setup.md) covers Xcode first-launch setup, Developer Mode
 - **Pre-Ride Ready.** While parked, check **Route**, **Position**, **Bike** and **Helmet audio** in the route preview. **Start** checks your current position in live mode. Bike connection and spoken directions do not block starting.
 - **Route alternatives.** In a live preview, tap **See routes on the map**. Tap a route line or its time-and-distance label to select it, then return to **Ride** and tap **Start**.
 - **Siri Home or Work preview.** Save **Home** or **Work** under **Ride settings → Places**, then try "Preview my route home in ClusterNav". Siri opens the app for a preview; tap **Start** separately. Siri invocation has not been validated on a physical iPhone.
+- **Rehearse the route.** In the route preview, open **Rehearse this route** to step through each turn and tap **Hear it**. The cue plays on the audio output in use, so it also checks the headset.
+- **Stops on the way.** In a live preview with no stop yet, open **Fuel or a rest stop on the way**. Places come from Apple Maps, listed with the least added time first; picking one plans the ride again, to the stop first. Not yet tried against live Apple Maps results.
+- **Ride plans.** In the route preview, tap **Save as a ride plan**. Plans appear on the Ride tab; using one sets Avoid tolls and Avoid highways to the plan's choices and asks for a fresh route.
 - **History.** Turn on **Keep ride history** in the History tab to keep the date, ride time and an estimated distance of each ride for 30 days. No positions are stored.
-- **GPS Recaps.** Open **History → GPS Recaps** and turn on **Record GPS tracks** before starting a new ride. It is off by default, separate from ride history, and never backfills earlier rides. A recap shows only the GPS fixes the app accepted; gaps are left unconnected. Open a recap to **Export GPX** or delete it. An export contains precise coordinates, timestamps and GPS accuracy, and deleting the recap does not remove exported copies.
+- **GPS Recaps.** Open **History → GPS Recaps** and turn on **Record GPS tracks** before starting a new ride. It is off by default, separate from ride history, and never backfills earlier rides. A recap shows only the GPS fixes the app accepted; gaps are left unconnected. Open a recap to **Export GPX** or delete it. The export screen shows exactly what will be shared and, by default, hides every point within 500 m of where the recording started and ended. An export contains precise coordinates, timestamps and GPS accuracy, and deleting the recap does not remove exported copies.
 
 ## Project layout
 
@@ -137,13 +142,15 @@ The project builds with Swift 6 and complete strict-concurrency checking. RideCo
 ```sh
 scripts/test.sh core   # RideCore package tests; works with Command Line Tools alone
 scripts/test.sh app    # app unit tests and UI tests on an iPhone simulator
+scripts/test.sh smoke  # one short simulator flow; reports a runner failure separately from an app failure
 scripts/test.sh all
 ```
 
 | Suite | Covers |
 | --- | --- |
-| RideCore (170 tests) | Frame encoding against golden vectors from the upstream protocol, write scheduling, route matching, rerouting, roundabouts, ride health, and deterministic replays of route fixtures. |
-| App unit tests (140 tests) | The app model on virtual time: route transactions, stops, recovery, history, GPS recaps, voice, and the Apple provider adapter with scripted locations and directions. |
+| RideCore (179 tests) | Frame encoding against golden vectors from the upstream protocol, write scheduling, route matching, rerouting, roundabouts, ride health, and deterministic replays of route fixtures. |
+| App unit tests (154 tests) | The app model on virtual time: route transactions, stops, recovery, history, GPS recaps, voice, and the Apple provider adapter with scripted locations and directions. |
+| Smoke test | One independent flow: enter a destination, check the pin, start a simulated ride, see a turn, end the ride. |
 | UI tests | Destination entry, confirmation, start and stop in simulation mode, settings, the bench tools and the Pre-Ride Ready panel. |
 
 Neither suite validates road safety or physical-cluster compatibility. Three UI tests that tap a switch fail intermittently in the simulator.
