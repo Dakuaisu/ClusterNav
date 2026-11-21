@@ -52,6 +52,19 @@ struct RideSettingsView: View {
                 }
 
                 Section {
+                    Toggle("Simulation mode", isOn: Binding(get: { model.simulationMode },
+                                                            set: { model.setSimulationMode($0) }))
+                        .disabled(model.stage != .choosing || model.provider == nil)
+                        .accessibilityIdentifier("settingsSimulationToggle")
+                    Toggle("Show Diagnostics tab", isOn: $model.diagnosticsTabEnabled)
+                        .accessibilityIdentifier("diagnosticsTabToggle")
+                } header: {
+                    Text("Advanced")
+                } footer: {
+                    Text("Simulation replays a synthetic route without Apple or Google route requests. Change it only between rides. Diagnostics is for parked-bike testing.")
+                }
+
+                Section {
                     Toggle("Offer to resume interrupted rides", isOn: Binding(
                         get: { model.recovery.enabled },
                         set: { on in on ? (showRecoveryDisclosure = true) : model.recovery.setEnabled(false) }))
@@ -109,7 +122,7 @@ struct RideSettingsView: View {
                 Button("Turn on") { model.recovery.setEnabled(true) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("N250 Ride will store the destination and stop of your current ride on this phone (not in backups) for up to 24 hours. Resuming always asks first and gets a fresh route.")
+                Text("Pulsar Vector will store the destination and stop of your current ride on this phone (not in backups) for up to 24 hours. Resuming always asks first and gets a fresh route.")
             }
         }
     }
@@ -134,27 +147,40 @@ struct RideHistoryView: View {
 
     var body: some View {
         List {
-            if model.history.rides.isEmpty {
-                Text(model.history.enabled ? "No rides yet." : "History is off. Turn it on in Ride settings.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(model.history.rides) { ride in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(ride.startedAt.formatted(date: .abbreviated, time: .shortened)).font(.headline)
-                    Text("\(Format.duration(ride.activeSeconds)) · about \(Format.distance(ride.estimatedMetres))")
-                        .font(.subheadline)
-                    Text(Self.outcome(ride.outcome)).font(.caption).foregroundStyle(.secondary)
+            Section {
+                NavigationLink {
+                    RideRecapView()
+                } label: {
+                    Label("GPS Recaps", systemImage: "location")
                 }
-                .swipeActions {
-                    Button("Delete", role: .destructive) { model.history.delete(ride.id) }
+                .accessibilityIdentifier("historyRecapsLink")
+            } footer: {
+                Text("GPS recording is separate from ride summaries and is off by default.")
+            }
+
+            Section("Ride summaries") {
+                if model.history.rides.isEmpty {
+                    Text(model.history.enabled ? "No rides yet." : "History is off. Turn it on in Ride settings.")
+                        .foregroundStyle(.secondary)
                 }
-            }
-            if let problem = model.history.problem {
-                Text(problem).font(.footnote).foregroundStyle(.orange)
-            }
-            if model.history.isBlocked {
-                Button("Discard stored history", role: .destructive) { confirmingDiscard = true }
-                    .accessibilityIdentifier("discardHistoryButton")
+                ForEach(model.history.rides) { ride in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(ride.startedAt.formatted(date: .abbreviated, time: .shortened)).font(.headline)
+                        Text("\(Format.duration(ride.activeSeconds)) · about \(Format.distance(ride.estimatedMetres))")
+                            .font(.subheadline)
+                        Text(Self.outcome(ride.outcome)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .swipeActions {
+                        Button("Delete", role: .destructive) { model.history.delete(ride.id) }
+                    }
+                }
+                if let problem = model.history.problem {
+                    Text(problem).font(.footnote).foregroundStyle(.orange)
+                }
+                if model.history.isBlocked {
+                    Button("Discard stored history", role: .destructive) { confirmingDiscard = true }
+                        .accessibilityIdentifier("discardHistoryButton")
+                }
             }
             if !model.history.rides.isEmpty {
                 Section {

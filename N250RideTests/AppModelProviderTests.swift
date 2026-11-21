@@ -32,6 +32,7 @@ final class SpyProvider: LiveNavigationProvider {
     var discarded: [PreparedRouteHandle] = []
     var committed: [PreparedRouteHandle] = []
     var selected: [RouteOption.ID] = []
+    var preparedHandle: PreparedRouteHandle?
     var started = 0
     var stops = 0
     var startCheck = StartCheck.ready
@@ -48,6 +49,7 @@ final class SpyProvider: LiveNavigationProvider {
                       completion: @escaping @MainActor (Result<PreparedRoute, RouteRequestFailure>) -> Void) {
         requests.append(request)
         let handle = PreparedRouteHandle(id: UUID())
+        preparedHandle = handle
         let origin = origin
         if request.reason.keepsSession {
             rerouteRequests.append(request.generation)
@@ -154,6 +156,63 @@ struct AppModelProviderTests {
         #expect(spy.routeRequests == 1)
     }
 
+    private func snapshot(_ state: NavigationState, session: SessionID) -> NavigationSnapshot {
+        NavigationSnapshot(session: session, generation: RouteGeneration(0), observedAt: timers.clock.now, state: state,
+                           step: GuidanceStep(maneuver: .turnLeft, distanceMetres: 200),
+                           remainingMetres: 500, remainingSeconds: 60, measurementAt: timers.clock.now)
+    }
+
+    private func guidanceIcon() -> UInt8? {
+        guard case .guidance(let fields, _) = model.intent else { return nil }
+        return fields.icon
+    }
+
+    @Test(arguments: ["success", "failure", "cancel", "timeout", "stop"])
+    func rerouteSignalFollowsAuthorizedOperation(end: String) throws {
+        model.propose(destination)
+        model.confirmDestination(label: "", saveAsFavourite: false)
+        spy.pendingRoute?(.success(spy.options))
+        model.startNavigation()
+        let session = try #require(spy.requests.first?.session)
+        spy.onSnapshot?(snapshot(.active, session: session))
+        model.requestReroute()
+        #expect(spy.rerouteRequests.isEmpty, "refused inside the route gate's debounce")
+        #expect(guidanceIcon() == ClusterIcon.turnLeft, "a refused request shows no reroute signal")
+        model.dismissRouteError()
+        timers.advance(by: .milliseconds(2_100))
+        spy.onSnapshot?(snapshot(.rerouting, session: session))
+        if end == "failure" { spy.onRerouteNeeded?() } else { model.requestReroute() }
+        guard case .guidance(let fields, let frame) = model.intent else {
+            Issue.record("authorized reroute did not produce guidance")
+            return
+        }
+        #expect(fields.icon == 66 && frame[1] == 66 && TbtFrame.hasValidChecksum(frame))
+        let oldAnswer = try #require(spy.pendingReroute)
+        switch end {
+        case "success": oldAnswer(.success(()))
+        case "failure": oldAnswer(.failure(.network))
+        case "cancel": model.cancelRouteOperation()
+        case "timeout": timers.advance(by: .seconds(30))
+        default: model.stopNavigation()
+        }
+        #expect(guidanceIcon() == nil, "the signal ends with the operation and nothing old is shown")
+        oldAnswer(.success(()))
+        #expect(guidanceIcon() == nil, "a late answer revives nothing")
+    }
+
+    @Test func recalculatingOnTheRouteKeepsTheTurnOnTheDashboard() throws {
+        model.propose(destination)
+        model.confirmDestination(label: "", saveAsFavourite: false)
+        spy.pendingRoute?(.success(spy.options))
+        model.startNavigation()
+        let session = try #require(spy.requests.first?.session)
+        timers.advance(by: .milliseconds(2_100))
+        spy.onSnapshot?(snapshot(.active, session: session))
+        model.requestReroute()
+        #expect(spy.rerouteRequests.count == 1)
+        #expect(guidanceIcon() == ClusterIcon.turnLeft, "the valid turn is not replaced by the reroute icon")
+    }
+
     @Test func lateRouteAnswerCannotReviveAStoppedRide() async throws {
         model.propose(destination)
         model.confirmDestination(label: "", saveAsFavourite: false)
@@ -234,6 +293,11 @@ struct AppModelProviderTests {
         gated.acceptTerms()
         gated.retry()
         gated.confirmDestination(label: "", saveAsFavourite: false)
+        guard case .failed(_, let message) = gated.stage else {
+            Issue.record("expected location permission failure, got \(gated.stage)")
+            return
+        }
+        #expect(message == "Location access is off. Enable it in Settings > Pulsar Vector > Location.")
         #expect(spy.routeRequests == 0)
     }
 
@@ -251,6 +315,50 @@ struct AppModelProviderTests {
         model.selectRoute(0)
         #expect(spy.selected == [2], "no switching once guidance has started")
         #expect(spy.routeRequests == 1)
+    }
+
+    @Test func diagnosticsVisibilityPersistsAndHidingSelectedTabReturnsToRide() {
+        let defaults = UserDefaults(suiteName: "DiagnosticsVisibility-\(UUID())")!
+        let configuration = AppConfiguration(navigationProvider: .apple, googleAPIKey: nil,
+                                             liveNavigationAuthorized: false, provenStatusProfile: nil)
+        let first = AppModel(configuration: configuration, defaults: defaults, provider: SpyProvider(),
+                             dependencies: .virtual(timers))
+        #expect(!first.diagnosticsTabEnabled)
+        first.diagnosticsTabEnabled = true
+        #expect(defaults.bool(forKey: "diagnosticsTabEnabled"))
+        let restored = AppModel(configuration: configuration, defaults: defaults, provider: SpyProvider(),
+                                dependencies: .virtual(timers))
+        #expect(restored.diagnosticsTabEnabled)
+        restored.selectedTab = .diagnostics
+        restored.diagnosticsTabEnabled = false
+        #expect(restored.selectedTab == .ride)
+        #expect(!defaults.bool(forKey: "diagnosticsTabEnabled"))
+        restored.selectedTab = .history
+        restored.diagnosticsTabEnabled = false
+        #expect(restored.selectedTab == .history)
+    }
+
+    @Test func mapSelectionRequiresCurrentUnexpiredProposalAndDoesNotStart() throws {
+        model.propose(destination)
+        model.confirmDestination(label: "", saveAsFavourite: false)
+        spy.pendingRoute?(.success(spy.options))
+        let handle = try #require(spy.preparedHandle)
+        model.selectPreviewRoute(PreparedRouteHandle(id: UUID()), option: 2)
+        model.selectPreviewRoute(handle, option: 99)
+        #expect(model.selectedRouteID == 0 && spy.selected.isEmpty)
+        model.selectPreviewRoute(handle, option: 2)
+        #expect(model.selectedRouteID == 2 && spy.selected == [2])
+        #expect(spy.routeRequests == 1 && spy.committed.isEmpty && spy.started == 0)
+
+        spy.holdStartChecks = true
+        model.startNavigation()
+        model.selectPreviewRoute(handle, option: 0)
+        model.selectRoute(0)
+        #expect(model.selectedRouteID == 2 && spy.selected == [2])
+        timers.advance(by: .seconds(121))
+        model.selectPreviewRoute(handle, option: 0)
+        #expect(model.previewExpired && model.selectedRouteID == 2 && spy.selected == [2])
+        #expect(spy.routeRequests == 1 && spy.committed.isEmpty && spy.started == 0)
     }
 
     @Test func customStatusValuesValidateRawBytes() {

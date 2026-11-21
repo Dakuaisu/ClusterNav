@@ -22,6 +22,9 @@ struct N250RideApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var shortcutHandoff = SavedPlaceShortcutHandoff.shared
+    @State private var shortcutMessage: String?
 
     var body: some View {
         @Bindable var model = model
@@ -35,13 +38,35 @@ struct RootView: View {
             BikeView()
                 .tabItem { Label("Bike", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(AppModel.Tab.bike)
-            DiagnosticsView()
-                .tabItem { Label("Diagnostics", systemImage: "wrench.and.screwdriver") }
-                .tag(AppModel.Tab.diagnostics)
+            NavigationStack { RideHistoryView() }
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+                .tag(AppModel.Tab.history)
+            if model.diagnosticsTabEnabled {
+                DiagnosticsView()
+                    .tabItem { Label("Diagnostics", systemImage: "wrench.and.screwdriver") }
+                    .tag(AppModel.Tab.diagnostics)
+            }
         }
         .sheet(item: confirmationBinding) { pending in
             DestinationConfirmation(pending: pending.value)
                 .interactiveDismissDisabled()
+        }
+        .alert("Route preview", isPresented: Binding(
+            get: { shortcutMessage != nil },
+            set: { if !$0 { shortcutMessage = nil } }
+        )) {
+            Button("OK") { shortcutMessage = nil }
+        } message: {
+            Text(shortcutMessage ?? "")
+        }
+        .task { consumeShortcutsIfActive() }
+        .onChange(of: scenePhase) { _, _ in consumeShortcutsIfActive() }
+        .onChange(of: shortcutHandoff.pending) { _, _ in consumeShortcutsIfActive() }
+    }
+
+    private func consumeShortcutsIfActive() {
+        if let message = shortcutHandoff.consumeIfActive(scenePhase == .active, model: model).last {
+            shortcutMessage = message
         }
     }
 

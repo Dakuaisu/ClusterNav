@@ -214,19 +214,7 @@ private struct RouteChoice: View {
                     Button("Recalculate") { model.recalculatePreview() }
                 }
             }
-            Button {
-                model.startNavigation()
-            } label: {
-                Label("Start", systemImage: "location.fill")
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(model.startStatus == .checking || model.previewExpired)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .accessibilityIdentifier("startNavigationButton")
+            startButton
         }
 
         Section {
@@ -234,6 +222,100 @@ private struct RouteChoice: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("cancelPreviewButton")
         }
+
+        PreRideReady()
+    }
+
+    private var startButton: some View {
+        Button {
+            model.startNavigation()
+        } label: {
+            Label("Start", systemImage: "location.fill")
+                .font(.title3.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .disabled(model.startStatus == .checking || model.previewExpired)
+        .accessibilityIdentifier("startNavigationButton")
+    }
+}
+
+private struct PreRideReady: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            ReadyStatusRow(title: "Route", detail: routeDetail, systemImage: "point.topleft.down.curvedto.point.bottomright.up",
+                           tint: model.previewExpired || selectedRoute == nil ? .orange : .accentColor)
+                .accessibilityIdentifier("readyRouteStatus")
+            ReadyStatusRow(title: "Position", detail: positionDetail, systemImage: "location",
+                           tint: .secondary)
+                .accessibilityIdentifier("readyPositionStatus")
+            ReadyStatusRow(title: "Bike", detail: LinkStatusRow.text(model.bike.state), systemImage: "motorcycle",
+                           tint: model.bike.state.isReady ? .green : .orange)
+                .accessibilityIdentifier("readyBikeStatus")
+            ReadyStatusRow(title: "Helmet audio", detail: audioDetail, systemImage: "headphones",
+                           tint: model.voice.holdReason == nil ? .accentColor : .orange)
+                .accessibilityIdentifier("readyAudioStatus")
+        } header: {
+            Label("Pre-Ride Ready", systemImage: "checklist")
+        } footer: {
+            Text("Review while parked. The bike connection and spoken directions do not prevent Start.")
+        }
+    }
+
+    private var selectedRoute: RouteOption? {
+        model.routeOptions.first { $0.id == model.selectedRouteID }
+    }
+
+    private var routeDetail: String {
+        if model.previewExpired { return "Expired. Recalculate before starting." }
+        guard let route = selectedRoute else { return "No route selected." }
+        let name = route.name.isEmpty ? "Selected route" : route.name
+        return "\(name) · \(Format.distance(route.distanceMetres)) · \(Format.duration(route.expectedSeconds))"
+    }
+
+    private var positionDetail: String {
+        if model.mode == .simulation { return "Simulated position; Start does not check GPS." }
+        if model.startStatus == .checking { return "Checking your current position against the route start…" }
+        guard let measured = model.lastFixTime else {
+            return "No cached fix. Start checks your current position and route origin."
+        }
+        let time = measured.formatted(date: .abbreviated, time: .standard)
+        return "Last cached fix: \(time). Start checks your current position and route origin."
+    }
+
+    private var audioDetail: String {
+        let state = model.voiceEnabled ? "Spoken directions on" : "Spoken directions off"
+        let reason = model.voice.holdReason.map { " \($0)" } ?? ""
+        return "\(state) · Output: \(model.voice.outputName).\(reason)"
+    }
+}
+
+private struct ReadyStatusRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(minWidth: 32, minHeight: 32)
+                .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 

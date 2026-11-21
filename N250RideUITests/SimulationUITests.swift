@@ -8,7 +8,8 @@ final class SimulationUITests: XCTestCase {
     override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["-simulationMode", "YES", "-disableLiveActivity", "YES"]
+        app.launchArguments += ["-simulationMode", "YES", "-disableLiveActivity", "YES",
+                                "-diagnosticsTabEnabled", "YES"]
         app.launch()
     }
 
@@ -153,6 +154,10 @@ final class SimulationUITests: XCTestCase {
         let voice = app.switches["voiceToggle"]
         XCTAssertTrue(voice.waitForExistence(timeout: 5))
         XCTAssertTrue(app.switches["avoidTollsToggle"].exists)
+        XCTAssertFalse(app.buttons["testAudioButton"].exists)
+        let simulation = app.switches["settingsSimulationToggle"]
+        for _ in 0..<4 where !simulation.isHittable { app.swipeUp() }
+        XCTAssertTrue(simulation.isHittable, "Simulation remains accessible without the Diagnostics tab")
         app.buttons["Done"].tap()
     }
 
@@ -228,5 +233,71 @@ final class SimulationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["cancelDestinationButton"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.textFields["labelField"].value as? String, "Lalbagh")
         app.buttons["cancelDestinationButton"].tap()
+    }
+}
+
+@MainActor
+final class RideTabUITests: XCTestCase {
+    func testDiagnosticsIsHiddenUntilEnabledInSettings() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-simulationMode", "YES", "-disableLiveActivity", "YES"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["History"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Diagnostics"].exists, "Diagnostics should be hidden by default")
+        setDiagnostics(true, in: app)
+        XCTAssertTrue(app.buttons["Diagnostics"].waitForExistence(timeout: 5))
+
+        app.terminate()
+        app.launch()
+        let diagnostics = app.buttons["Diagnostics"]
+        XCTAssertTrue(diagnostics.waitForExistence(timeout: 5), "Opt-in should persist after relaunch")
+        diagnostics.tap()
+        XCTAssertTrue(app.buttons["bluetoothConsoleLink"].waitForExistence(timeout: 5))
+
+        app.buttons["Ride"].tap()
+        setDiagnostics(false, in: app)
+        XCTAssertFalse(diagnostics.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["History"].exists)
+        app.terminate()
+        app.launch()
+        XCTAssertFalse(app.buttons["Diagnostics"].exists, "Opting out should persist after relaunch")
+    }
+
+    func testHistoryOpensRecapsAndKeepsRecordingConsent() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments += ["-simulationMode", "YES", "-disableLiveActivity", "YES",
+                                "-rideTracksEnabled", "NO"]
+        app.launch()
+
+        app.buttons["History"].tap()
+        XCTAssertTrue(app.staticTexts["Ride summaries"].waitForExistence(timeout: 5))
+        let recaps = app.buttons["historyRecapsLink"]
+        XCTAssertTrue(recaps.waitForExistence(timeout: 5))
+        recaps.tap()
+
+        let recording = app.switches["trackRecordingToggle"]
+        XCTAssertTrue(recording.waitForExistence(timeout: 5))
+        XCTAssertEqual(recording.value as? String, "0")
+        recording.switches.firstMatch.tap()
+        let disclosure = app.alerts["Record GPS tracks?"]
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 5))
+        disclosure.buttons["Cancel"].tap()
+        XCTAssertEqual(recording.value as? String, "0", "Cancelling must not enable GPS recording")
+    }
+
+    private func setDiagnostics(_ enabled: Bool, in app: XCUIApplication) {
+        let settings = app.buttons["rideSettingsButton"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let toggle = app.switches["diagnosticsTabToggle"]
+        for _ in 0..<6 where !toggle.isHittable { app.swipeUp() }
+        XCTAssertTrue(toggle.isHittable)
+        XCTAssertEqual(toggle.value as? String, enabled ? "0" : "1")
+        toggle.switches.firstMatch.tap()
+        XCTAssertEqual(toggle.value as? String, enabled ? "1" : "0")
+        app.buttons["Done"].tap()
     }
 }

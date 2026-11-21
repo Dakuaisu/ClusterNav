@@ -32,7 +32,7 @@ final class AppModel {
     }
 
     enum Tab: Hashable {
-        case ride, map, bike, diagnostics
+        case ride, map, bike, history, diagnostics
     }
 
     enum RideStage: Equatable {
@@ -71,6 +71,14 @@ final class AppModel {
     /// Status packet profile under bench test; nil sends none.
     private(set) var statusProfile: GeneralStatusProfile?
     var selectedTab: Tab = .ride
+    var diagnosticsTabEnabled: Bool {
+        didSet {
+            defaults.set(diagnosticsTabEnabled, forKey: Self.diagnosticsTabKey)
+            if !diagnosticsTabEnabled && selectedTab == .diagnostics { selectedTab = .ride }
+        }
+    }
+    /// When the newest admitted position was measured; observable, unlike the provider's fix.
+    private(set) var lastFixTime: Date?
     private(set) var routeOptions: [RouteOption] = []
     private(set) var selectedRouteID: RouteOption.ID?
     /// Latest accepted guidance, for the on-phone turn card.
@@ -132,6 +140,7 @@ final class AppModel {
     let recovery: RecoveryStore
     let inbox: IncomingInbox
     let history: RideHistoryStore
+    let tracks: RideTrackStore
     let setup: BikeSetupModel
 
     @ObservationIgnored private let clock: RideClock
@@ -214,6 +223,7 @@ final class AppModel {
     private static let voiceStyleKey = "voiceStyle"
     private static let routePreferencesKey = "routePreferences"
     private static let energyKey = "energySaving"
+    private static let diagnosticsTabKey = "diagnosticsTabEnabled"
 
     init(configuration: AppConfiguration = .load(), defaults: UserDefaults = .standard,
          provider injected: LiveNavigationProvider? = nil, dependencies: AppDependencies? = nil) {
@@ -240,6 +250,7 @@ final class AppModel {
         recovery = RecoveryStore(directory: deps.storage, defaults: defaults)
         inbox = IncomingInbox(directory: deps.storage, now: now)
         history = RideHistoryStore(directory: deps.storage, now: now, defaults: defaults)
+        tracks = RideTrackStore(directory: deps.storage, defaults: defaults)
         let info = Bundle.main.infoDictionary ?? [:]
         setup = BikeSetupModel(directory: deps.storage,
                                appVersion: "\(info["CFBundleShortVersionString"] as? String ?? "?") (\(info["CFBundleVersion"] as? String ?? "?"))")
@@ -258,6 +269,7 @@ final class AppModel {
         routePreferences = defaults.data(forKey: Self.routePreferencesKey)
             .flatMap { try? JSONDecoder().decode(RoutePreferences.self, from: $0) } ?? RoutePreferences()
         energySaving = defaults.bool(forKey: Self.energyKey)
+        diagnosticsTabEnabled = defaults.bool(forKey: Self.diagnosticsTabKey)
         UIDevice.current.isBatteryMonitoringEnabled = true
 
         provider = injected ?? Self.makeProvider(configuration, clock: clock, timers: deps.timers)
@@ -275,6 +287,9 @@ final class AppModel {
         }
         coordinator.onActivity = { [weak self] in self?.scheduleWake() }
         provider?.onSnapshot = { [weak self] in self?.receive($0) }
+        (provider as? AppleNavigationProvider)?.onPreviewRouteSelection = { [weak self] handle, option in
+            self?.selectPreviewRoute(handle, option: option)
+        }
         provider?.onLongPress = { [weak self] coordinate in
             guard let self, stage == .choosing else { return }
             propose(coordinate, provenance: .mapSelection)
@@ -282,7 +297,11 @@ final class AppModel {
         provider?.onRerouteNeeded = { [weak self] in self?.requestReroute(.offRoute) }
         provider?.onFix = { [weak self] fix in
             guard let self else { return }
+            lastFixTime = fix.sample.timestamp
             history.add(fix.fix, now: clock.wallNow)
+            if mode == .live, journeyStarted, isRiding, !arrivalFinalized {
+                tracks.add(fix.sample, now: clock.wallNow)
+            }
             updateHealth()
             scheduleWake()
         }
@@ -605,11 +624,17 @@ final class AppModel {
 
     /// Chooses between the candidates of the one request already made. No request.
     func selectRoute(_ id: RouteOption.ID) {
-        guard case .preview = stage, routeOptions.contains(where: { $0.id == id }) else { return }
+        guard case .preview = stage, startStatus != .checking, !previewExpired,
+              routeOptions.contains(where: { $0.id == id }) else { return }
         if mode == .live {
             guard let proposal, provider?.previewPrepared(proposal.handle, option: id) == true else { return }
         }
         selectedRouteID = id
+    }
+
+    func selectPreviewRoute(_ handle: PreparedRouteHandle, option: RouteOption.ID) {
+        guard mode == .live, proposal?.handle == handle else { return }
+        selectRoute(option)
     }
 
     /// Authorises and prepares one route. Nothing active changes until commit.
@@ -673,6 +698,9 @@ final class AppModel {
         let deadline = timers.schedule(after: Self.operationDeadline) { [weak self] in self?.operationTimedOut(id) }
         operation = Operation(id: id, ticket: ticket, reason: reason, context: context, session: session,
                               generation: generation, pending: pending, deadline: deadline)
+        if reason == .manual || reason == .offRoute, isRiding, coordinator.session == session {
+            coordinator.beginReroute(id: id, session: session)
+        }
         if opensPreview {
             stage = .requesting(pending)
         } else {
@@ -702,6 +730,7 @@ final class AppModel {
         op.deadline.cancel()
         routeGate.finish(op.ticket)
         operation = nil
+        coordinator.endReroute(id: op.id)
     }
 
     private func operationTimedOut(_ id: UUID) {
@@ -827,9 +856,15 @@ final class AppModel {
         journeyStarted = true
         recovery.commit(proposal.context, startedAt: rideStartedAt ?? now, now: now)
         switch proposal.reason {
-        case .nextLeg: history.continueRide(proposal.context.id)
-        case .recovery: history.resume(proposal.context.id, now: now)
-        default: history.begin(proposal.context.id, startedAt: rideStartedAt ?? now, now: now)
+        case .nextLeg:
+            history.continueRide(proposal.context.id)
+            tracks.resume(proposal.context.id, at: now)
+        case .recovery:
+            history.resume(proposal.context.id, now: now)
+            tracks.resume(proposal.context.id, at: now)
+        default:
+            history.begin(proposal.context.id, startedAt: rideStartedAt ?? now, now: now)
+            tracks.begin(proposal.context.id, startedAt: now)
         }
         if let item = pending.inboxItem { inbox.consume(item) }
         provider?.startGuidance()
@@ -844,9 +879,13 @@ final class AppModel {
         let now = clock.wallNow
         if newJourney {
             history.finish(.endedByRider, now: now)
-            if let old = ride { recovery.finish(old.id, now: now) }
+            if let old = ride {
+                recovery.finish(old.id, now: now)
+                tracks.finish(old.id, now: now)
+            }
             rideStartedAt = now
             history.begin(op.context.id, startedAt: now, now: now)
+            tracks.begin(op.context.id, startedAt: now)
         } else {
             history.breakSegment()
         }
@@ -951,6 +990,7 @@ final class AppModel {
         if wasRiding || journeyStarted, let ride, mode == .live {
             if !arrivalFinalized { history.finish(.endedByRider, now: clock.wallNow) }
             recovery.finish(ride.id, now: clock.wallNow)
+            tracks.finish(ride.id, now: clock.wallNow)
         }
         ride = nil
         rideStartedAt = nil
@@ -1062,6 +1102,7 @@ final class AppModel {
             self.ride = next
             history.breakSegment()
             history.checkpoint(now: clock.wallNow)
+            tracks.pause()
             recovery.commit(next, startedAt: rideStartedAt ?? clock.wallNow, now: clock.wallNow)
             guidance = nil
             stage = .atStop(Self.pending(for: next))
@@ -1072,6 +1113,7 @@ final class AppModel {
             if mode == .live {
                 history.finish(.completed, now: clock.wallNow)
                 recovery.finish(ride.id, now: clock.wallNow)
+                tracks.finish(ride.id, now: clock.wallNow)
             }
         case .ignored:
             break
@@ -1102,6 +1144,8 @@ final class AppModel {
             ride = context
             // Leg two continues the recording only if leg one was being recorded under current consent.
             history.resume(context.id, now: clock.wallNow)
+            tracks.resume(context.id, at: clock.wallNow)
+            tracks.pause()
             journeyStarted = true
             recoveryOffer = nil
             stage = .atStop(Self.pending(for: context))
@@ -1116,6 +1160,7 @@ final class AppModel {
     func discardRecovery() {
         recovery.discard()
         recoveryOffer = nil
+        tracks.closeAbandonedDrafts()
         updateHealth()
     }
 

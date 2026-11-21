@@ -40,15 +40,6 @@ struct DiagnosticsView: View {
                     Text("Send raw bytes to the dashboard and watch its buttons, or test every feature the owner's manual lists. Parked bike only.")
                 }
 
-                Section {
-                    Toggle("Simulation mode", isOn: Binding(get: { model.simulationMode },
-                                                            set: { model.setSimulationMode($0) }))
-                        .disabled(model.stage != .choosing || model.provider == nil)
-                        .accessibilityIdentifier("simulationToggle")
-                } footer: {
-                    Text("Replays a synthetic route instead of real navigation; no Apple or Google route requests. Change it only between rides.")
-                }
-
                 if model.diagnosticsLocked {
                     Section { LockBanner() }
                 }
