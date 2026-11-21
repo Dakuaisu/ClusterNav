@@ -4,9 +4,9 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// "Share → Pulsar Vector" from Apple Maps, Google Maps, WhatsApp and others. Finds a
+/// "Share → ClusterNav" from Apple Maps, Google Maps, WhatsApp and others. Finds a
 /// location in what was shared, leaves it for the app, and asks the rider to open
-/// Pulsar Vector (iOS does not let share extensions open their app).
+/// ClusterNav (iOS does not let share extensions open their app).
 final class ShareViewController: UIViewController {
     private let status = ShareStatus()
 
@@ -80,14 +80,14 @@ struct ShareView: View {
                 ProgressView("Reading location…")
             case .sent:
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 56)).foregroundStyle(.green)
-                Text("Sent to Pulsar Vector").font(.title2.weight(.semibold))
-                Text("Open Pulsar Vector soon to keep it: until the app opens, a phone restart can lose it.")
+                Text("Sent to ClusterNav").font(.title2.weight(.semibold))
+                Text("Open ClusterNav soon to keep it: until the app opens, a phone restart can lose it.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 56)).foregroundStyle(.orange)
-                Text("Couldn't hand it to Pulsar Vector").font(.title2.weight(.semibold))
-                Text("Copy the link and paste it in Pulsar Vector instead.")
+                Text("Couldn't hand it to ClusterNav").font(.title2.weight(.semibold))
+                Text("Copy the link and paste it in ClusterNav instead.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             case .noLocation:

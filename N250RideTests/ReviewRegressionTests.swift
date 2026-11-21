@@ -78,7 +78,7 @@ struct ReviewRegressionTests {
     // MARK: M1 Live Activity expiry
 
     @Test func m1StaleActivityUsesTheCurrentAppName() {
-        #expect(RideActivityAttributes.ContentState.stale.detail == "Open Pulsar Vector")
+        #expect(RideActivityAttributes.ContentState.stale.detail == "Open ClusterNav")
     }
 
     @Test func m1EqualContentStillRenewsTheStaleDate() async {

@@ -92,7 +92,7 @@ struct RideRecapDetailView: View {
             Text("This stops recording this track if it is still in progress. Ride-history summaries and exported copies are not deleted.")
         }
         .fileExporter(isPresented: $showingExporter, document: exportDocument,
-                      contentTypes: [RideRecapGPXDocument.contentType], defaultFilename: "Pulsar-ride.gpx") { result in
+                      contentTypes: [RideRecapGPXDocument.contentType], defaultFilename: "ClusterNav-ride.gpx") { result in
             exportDocument = nil
             if case .failure(let error) = result {
                 let failure = error as NSError

@@ -2,8 +2,9 @@ Config/Local.xcconfig
 .codegraph
 .omo/
 .serena/
+ClusterNav.xcodeproj/
+# Generated under the project's earlier names; never committed.
 PulsarVector.xcodeproj/
-# Generated under the project's earlier name; never committed.
 N250Ride.xcodeproj/
 *.xcworkspace/
 *.xcuserstate

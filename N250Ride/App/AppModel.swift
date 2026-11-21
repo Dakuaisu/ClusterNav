@@ -655,7 +655,7 @@ final class AppModel {
             switch locationAuthorization() {
             case .denied, .restricted:
                 record(.permission(.locationDenied))
-                stage = .failed(pending, "Location access is off. Enable it in Settings > Pulsar Vector > Location.")
+                stage = .failed(pending, "Location access is off. Enable it in Settings > ClusterNav > Location.")
                 return
             case .notDetermined:
                 locationManager.requestWhenInUseAuthorization()

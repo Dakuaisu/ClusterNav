@@ -18,7 +18,7 @@ sudo xcodebuild -runFirstLaunch
 ```sh
 scripts/bootstrap-xcode.sh
 ```
-This installs the iOS simulator platform if missing, generates `PulsarVector.xcodeproj` and runs
+This installs the iOS simulator platform if missing, generates `ClusterNav.xcodeproj` and runs
 `scripts/test.sh core` and `scripts/test.sh app`. The default build uses Apple Maps and needs no API key or
 billing; the Google packages are commented out in `project.yml` (see section 4). Simulation mode is a separate
 switch under Ride settings > Advanced that replays a synthetic route without any route request. Result bundles go to
@@ -33,10 +33,10 @@ SIMULATOR_UDID=<udid> scripts/test.sh app             # app + UI tests on a simu
 ## 3. Install on your iPhone (free signing)
 1. `cp Config/Local.example.xcconfig Config/Local.xcconfig` and set `N250_DEVELOPMENT_TEAM` (your Personal Team
    ID from Xcode > Settings > Accounts) and a unique `N250_BUNDLE_ID`.
-2. Run `xcodegen generate`, open `PulsarVector.xcodeproj`, select the **PulsarVector** scheme and your iPhone, then Run.
+2. Run `xcodegen generate`, open `ClusterNav.xcodeproj`, select the **ClusterNav** scheme and your iPhone, then Run.
 3. On the phone: enable Settings > Privacy & Security > Developer Mode (restart), and after the first install
    Settings > General > VPN & Device Management > trust your developer certificate.
-   Command-line alternative once the team is set: `xcodebuild build -project PulsarVector.xcodeproj -scheme PulsarVector -destination id=<UDID> -allowProvisioningUpdates`
+   Command-line alternative once the team is set: `xcodebuild build -project ClusterNav.xcodeproj -scheme ClusterNav -destination id=<UDID> -allowProvisioningUpdates`
    then `xcrun devicectl device install app --device <UDID> <path to Debug-iphoneos/N250Ride.app>`.
 4. Free Personal Team installs **expire after 7 days**; reconnect and Run again to renew.
 
@@ -75,7 +75,7 @@ scripts/oracle/generate-vectors.sh --check
 U=<simulator udid>
 xcrun simctl privacy $U grant location-always <bundle id>
 xcrun simctl location $U start --speed=6 --interval=1 - < waypoints.txt   # or: location $U set 12.9757,77.6050
-TEST_RUNNER_N250_LIVE=1 xcodebuild test -project PulsarVector.xcodeproj -scheme PulsarVector \
+TEST_RUNNER_N250_LIVE=1 xcodebuild test -project ClusterNav.xcodeproj -scheme ClusterNav \
   -destination "platform=iOS Simulator,id=$U" -only-testing:N250RideUITests/LiveAppleRouteUITests
 ```
 Normal test runs skip this test, so they never contact Apple.

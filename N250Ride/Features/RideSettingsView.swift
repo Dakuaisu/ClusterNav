@@ -122,7 +122,7 @@ struct RideSettingsView: View {
                 Button("Turn on") { model.recovery.setEnabled(true) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Pulsar Vector will store the destination and stop of your current ride on this phone (not in backups) for up to 24 hours. Resuming always asks first and gets a fresh route.")
+                Text("ClusterNav will store the destination and stop of your current ride on this phone (not in backups) for up to 24 hours. Resuming always asks first and gets a fresh route.")
             }
         }
     }

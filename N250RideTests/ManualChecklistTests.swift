@@ -52,7 +52,7 @@ struct ManualChecklistTests {
         #expect(reopened.result("reroute.wrongway") == .init(outcome: .asManual, note: "REROUTING shown"))
         #expect(reopened.tested(in: sections) == 1)
         let report = reopened.report(sections, appVersion: "1.0 (1)", statusProfile: .legacy55, consoleLog: "LOG")
-        #expect(report.hasPrefix("Pulsar Vector - manual checklist\n"))
+        #expect(report.hasPrefix("ClusterNav - manual checklist\n"))
         #expect(report.contains("[As manual] reroute.wrongway Wrong-way icon (66) - REROUTING shown"))
         #expect(report.contains("[Not tried] nav.turn Turn ahead"))
         #expect(report.hasSuffix("## Console log\nLOG"))

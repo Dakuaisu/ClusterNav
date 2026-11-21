@@ -1,6 +1,6 @@
-# Pulsar Vector
+# ClusterNav
 
-Pulsar Vector is an unofficial SwiftUI iPhone app that brings turn-by-turn guidance to the 2026 Bajaj Pulsar N250’s existing instrument cluster. MapKit plans the route, the local Swift guidance engine tracks progress, and CoreBluetooth sends dashboard updates over Bluetooth Low Energy (BLE).
+ClusterNav is an unofficial SwiftUI iPhone app that brings turn-by-turn guidance to the 2026 Bajaj Pulsar N250’s existing instrument cluster. MapKit plans the route, the local Swift guidance engine tracks progress, and CoreBluetooth sends dashboard updates over Bluetooth Low Energy (BLE).
 
 **Development status:** this is a development build, not a road-validated release. Parked bench checks and the owner's ride feedback have shaped roundabout exits, spoken directions, and dashboard updates, but they do not establish end-to-end navigation reliability. Don't rely on this build as your sole navigation aid. See the [support matrix](docs/support-matrix.md) for feature-by-feature evidence and limits.
 
@@ -11,10 +11,10 @@ Use macOS with Xcode 26 or later, an installed iOS simulator runtime, and XcodeG
 ```sh
 brew install xcodegen
 xcodegen generate
-open PulsarVector.xcodeproj
+open ClusterNav.xcodeproj
 ```
 
-1. Select the **PulsarVector** scheme and an iPhone simulator, then run the app.
+1. Select the **ClusterNav** scheme and an iPhone simulator, then run the app.
 2. Open **Ride settings → Advanced** and enable **Simulation mode** before starting a ride. Use **Show Diagnostics tab** in the same section to reveal the bench tools.
 3. Return to the destination picker, expand **Coordinates or plus code**, and enter `12.9716, 77.5946`. Use the entered destination, confirm it, then tap **Start**.
 4. Watch the turn card and distance update on the synthetic route. Tap **End ride** to return to the picker.
@@ -25,7 +25,7 @@ Simulation needs no bike, API key, or live route request. It demonstrates the ap
 
 - **Pre-Ride Ready:** While parked, check **Route**, **Position**, **Bike**, and **Helmet audio** in the route preview. **Start** checks your current position in live mode. Bike connection and spoken directions do not block starting.
 - **Route alternatives:** In a live preview, tap **See routes on the map**. Tap a route line or its time-and-distance label to select it, then return to **Ride** and tap **Start**.
-- **Siri Home or Work preview:** Save **Home** or **Work** under **Ride settings → Places**. Try “Preview my route home in Pulsar Vector” or “Preview my route to work in Pulsar Vector.” Siri opens the app for a preview; tap **Start** separately. Siri invocation has not been validated on a physical iPhone.
+- **Siri Home or Work preview:** Save **Home** or **Work** under **Ride settings → Places**. Try “Preview my route home in ClusterNav” or “Preview my route to work in ClusterNav.” Siri opens the app for a preview; tap **Start** separately. Siri invocation has not been validated on a physical iPhone.
 - **History and GPS Recaps:** Open **History → GPS Recaps** and turn on **Record GPS tracks** before starting a new ride. It is off by default, separate from **Keep ride history**, and never backfills earlier rides. Recaps stay on this phone and show only GPS fixes the app accepted during recording; gaps are left unconnected. Open a recap to **Export GPX** or **Delete recap**. Export includes precise recorded coordinates, timestamps, and GPS accuracy; deleting the recap does not remove exported copies. See the [support matrix](docs/support-matrix.md) for recording caps.
 
 ## How it works

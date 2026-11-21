@@ -106,7 +106,7 @@ struct DestinationPicker: View {
             } header: {
                 Text("From another app")
             } footer: {
-                Text("Copy a place from Apple Maps, Google Maps or WhatsApp and paste it here, or use Share → Pulsar Vector.")
+                Text("Copy a place from Apple Maps, Google Maps or WhatsApp and paste it here, or use Share → ClusterNav.")
             }
 
             Section {

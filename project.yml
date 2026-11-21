@@ -1,4 +1,4 @@
-name: PulsarVector
+name: ClusterNav
 options:
   bundleIdPrefix: com.n250ride
   deploymentTarget:
@@ -39,16 +39,16 @@ targets:
     info:
       path: N250Ride/Info.plist
       properties:
-        CFBundleDisplayName: Pulsar Vector
+        CFBundleDisplayName: ClusterNav
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
           - CFBundleURLName: com.n250ride.open
             CFBundleURLSchemes: [n250ride]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSBluetoothAlwaysUsageDescription: Pulsar Vector connects to your motorcycle's instrument cluster to show turn arrows, distance and arrival time.
-        NSLocationWhenInUseUsageDescription: Pulsar Vector uses your location to calculate the route and give turn-by-turn guidance.
-        NSLocationAlwaysAndWhenInUseUsageDescription: Pulsar Vector keeps guiding and updating your bike's dashboard while the phone is locked during navigation.
+        NSBluetoothAlwaysUsageDescription: ClusterNav connects to your motorcycle's instrument cluster to show turn arrows, distance and arrival time.
+        NSLocationWhenInUseUsageDescription: ClusterNav uses your location to calculate the route and give turn-by-turn guidance.
+        NSLocationAlwaysAndWhenInUseUsageDescription: ClusterNav keeps guiding and updating your bike's dashboard while the phone is locked during navigation.
         UIBackgroundModes: [bluetooth-central, location, audio]
         N250NavigationProvider: $(N250_NAV_PROVIDER)
         N250GoogleAPIKey: $(N250_GOOGLE_API_KEY)
@@ -66,7 +66,7 @@ targets:
     info:
       path: N250RideWidgets/Info.plist
       properties:
-        CFBundleDisplayName: Pulsar Vector
+        CFBundleDisplayName: ClusterNav
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -83,7 +83,7 @@ targets:
     info:
       path: N250RideShare/Info.plist
       properties:
-        CFBundleDisplayName: Pulsar Vector
+        CFBundleDisplayName: ClusterNav
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -115,7 +115,7 @@ targets:
     dependencies:
       - target: N250Ride
 schemes:
-  PulsarVector:
+  ClusterNav:
     build:
       targets:
         N250Ride: all

@@ -24,7 +24,7 @@ if ! xcrun simctl list runtimes | grep -q "iOS"; then
 fi
 
 (cd "$ROOT" && xcodegen generate --quiet)
-xcodebuild -resolvePackageDependencies -project "$ROOT/PulsarVector.xcodeproj" -scheme PulsarVector
+xcodebuild -resolvePackageDependencies -project "$ROOT/ClusterNav.xcodeproj" -scheme ClusterNav
 
 "$ROOT/scripts/test.sh" core
 RESULT_BUNDLE="$EVIDENCE/app-tests-$(date +%Y%m%d-%H%M%S).xcresult" "$ROOT/scripts/test.sh" app

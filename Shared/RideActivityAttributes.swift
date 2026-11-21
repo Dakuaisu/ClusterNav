@@ -17,7 +17,7 @@ struct RideActivityAttributes: ActivityAttributes {
 
         /// Shown once the position behind the content has expired: never a direction.
         static let stale = ContentState(symbol: "exclamationmark.triangle", headline: "Guidance paused",
-                                        detail: "Open Pulsar Vector", arrival: nil, remaining: "", warning: true)
+                                        detail: "Open ClusterNav", arrival: nil, remaining: "", warning: true)
     }
 
     var destination: String

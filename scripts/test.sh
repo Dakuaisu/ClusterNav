@@ -53,7 +53,7 @@ app() {
   xcrun simctl privacy "$udid" reset location > /dev/null 2>&1 || true
   echo "simulator: $udid"
   echo "result bundle: $bundle"
-  xcodebuild test -project "$ROOT/PulsarVector.xcodeproj" -scheme PulsarVector \
+  xcodebuild test -project "$ROOT/ClusterNav.xcodeproj" -scheme ClusterNav \
     -destination "platform=iOS Simulator,id=$udid" -resultBundlePath "$bundle"
 }
 

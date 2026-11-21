@@ -28,7 +28,7 @@ struct DiagnosticsTests {
         log.record(.appLaunched(live: false), at: clock.now)
 
         let text = log.export(appVersion: "1.0 (1)", sdkVersion: nil, osVersion: "iOS 18.0")
-        #expect(text.hasPrefix("Pulsar Vector diagnostics\n"))
+        #expect(text.hasPrefix("ClusterNav diagnostics\n"))
         #expect(!text.contains(sentinelKey))
         #expect(!text.contains(sentinelRoad))
         #expect(!text.contains("Sentinel"))

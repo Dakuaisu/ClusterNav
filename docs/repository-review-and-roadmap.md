@@ -1,6 +1,6 @@
 # N250 Ride: Repository Review and Roadmap
 
-> Historical review from before the Pulsar Vector rename. The original commands and file references describe the baseline below. For current Xcode instructions, see [Setup](setup.md).
+> Historical review from before the ClusterNav rename. The original commands and file references describe the baseline below. For current Xcode instructions, see [Setup](setup.md).
 
 Review date: 2026-11-13. Repository: the repository root. Baseline commit: `52c656bd8ab1e086fee659579e9230cbde7c0dc7`. The working tree was clean before review. This is a read-only implementation review, not approval for road use. Only this report was intentionally authored; no recommendation was implemented.
 

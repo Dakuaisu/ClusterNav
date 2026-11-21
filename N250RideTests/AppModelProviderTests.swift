@@ -297,7 +297,7 @@ struct AppModelProviderTests {
             Issue.record("expected location permission failure, got \(gated.stage)")
             return
         }
-        #expect(message == "Location access is off. Enable it in Settings > Pulsar Vector > Location.")
+        #expect(message == "Location access is off. Enable it in Settings > ClusterNav > Location.")
         #expect(spy.routeRequests == 0)
     }
 

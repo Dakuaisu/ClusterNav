@@ -1,4 +1,4 @@
-# Pulsar Vector: Navigation cost model
+# ClusterNav: Navigation cost model
 
 **Read date: 2026-11-11. GATE-2 OPEN/blocked pending owner billing decision.** Standard published pay-as-you-go prices, not a customer-specific quote. No billing account or project was inspected or changed. Full source URLs are in the [evidence register](../.omo/evidence/n250-ios-navigation/task-02-feasibility.md).
 

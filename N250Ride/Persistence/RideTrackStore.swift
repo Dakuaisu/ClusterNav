@@ -306,7 +306,7 @@ final class RideTrackStore {
             }.joined()
             return "<trkseg>\(points)</trkseg>"
         }.joined()
-        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"Pulsar Vector\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:pv=\"urn:pulsar-vector:gpx:1\"><trk>\(segments)</trk></gpx>"
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"ClusterNav\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:pv=\"urn:clusternav:gpx:1\"><trk>\(segments)</trk></gpx>"
     }
 
     private func trackFile(_ id: RideID) -> RecordFile<RideTrack> {
