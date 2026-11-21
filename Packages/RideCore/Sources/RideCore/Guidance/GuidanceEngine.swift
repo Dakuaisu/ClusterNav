@@ -155,11 +155,18 @@ public final class GuidanceEngine {
             guard along > 0 || !instructions.isEmpty else { continue }
             let next = index + 1 < ends.count ? ends[index + 1] : polyline.length
             let cues = ManeuverClassifier.cues(instructions)
-            if cues.kind == .roundabout {
-                // Apple's roundabout step ends where the route leaves the ring; the ring is
-                // the end of this step. Measure from the road in to the road out.
-                let ring = Self.roundabout(polyline, exit: along, floor: maneuvers.last?.along ?? 0,
-                                           stepAfter: next - along, drivingSide: configuration.drivingSide)
+            // Apple's roundabout step ends where the route leaves the ring; the ring is
+            // the end of this step. Measure from the road in to the road out.
+            let ring = Self.roundabout(polyline, exit: along, floor: maneuvers.last?.along ?? 0,
+                                       stepAfter: next - along, drivingSide: configuration.drivingSide)
+            // Wording the classifier can't read (another phone language) says nothing
+            // about a roundabout, so a ring in the line itself has to be recognised:
+            // otherwise every exit would be announced as the plain turn off the ring.
+            let unreadable = cues.kind == nil && cues.side == nil
+            let ringInLine = unreadable && (ring.map { $0.entry <= along - 10 } ?? false)
+                && Self.leavesAgainstCirculation(polyline, exit: along, stepAfter: next - along,
+                                                 drivingSide: configuration.drivingSide)
+            if cues.kind == .roundabout || ringInLine {
                 let (maneuver, direction) = ManeuverClassifier.roundabout(cues, angle: ring?.angle,
                                                                           drivingSide: configuration.drivingSide)
                 maneuvers.append(PlannedManeuver(along: along, maneuver: maneuver, roundaboutDirection: direction,
@@ -312,6 +319,17 @@ public final class GuidanceEngine {
         let path = [approach] + ring[0...firstRingPiece].reversed() + [out]
         let angle = zip(path, path.dropFirst()).reduce(0.0) { $0 + RoutePolyline.turn(from: $1.0, to: $1.1) }
         return (entry, angle)
+    }
+
+    /// Whether the route turns off against the direction of circulation at `exit`, as
+    /// it does when leaving a ring. A rounded corner keeps turning the same way.
+    static func leavesAgainstCirculation(_ line: RoutePolyline, exit: Double, stepAfter: Double,
+                                         drivingSide: DrivingSide) -> Bool {
+        let circulation = drivingSide == .left ? 1.0 : -1.0
+        let outEnd = exit + max(min(35, stepAfter), 10)
+        guard let last = line.bearing(from: exit - 5, to: exit),
+              let out = line.bearing(from: min(exit + 5, outEnd - 5), to: outEnd) else { return false }
+        return circulation * RoutePolyline.turn(from: last, to: out) <= -20
     }
 
     /// Road name after "onto"/"on" in an instruction, if any.
