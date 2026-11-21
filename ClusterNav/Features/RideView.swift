@@ -150,6 +150,9 @@ struct Chip: View {
 private struct RouteChoice: View {
     @Environment(AppModel.self) private var model
     let pending: AppModel.PendingDestination
+    @State private var namingPlan = false
+    @State private var planName = ""
+    @State private var planMessage: String?
 
     var body: some View {
         Section {
@@ -234,6 +237,54 @@ private struct RouteChoice: View {
                 .accessibilityIdentifier("cancelPreviewButton")
         }
 
+        if model.canSuggestStops {
+            Section {
+                NavigationLink {
+                    StopSuggestionsView()
+                } label: {
+                    Label("Fuel or a rest stop on the way", systemImage: "fuelpump")
+                }
+                .accessibilityIdentifier("findStopsLink")
+            } footer: {
+                Text("Looks along this route and ranks places by the minutes they add, then plans the ride through the one you pick.")
+            }
+        }
+
+        Section {
+            NavigationLink {
+                RouteRehearsalView()
+            } label: {
+                Label("Rehearse this route", systemImage: "list.bullet.indent")
+            }
+            .disabled(model.rehearsalSteps.isEmpty)
+            .accessibilityIdentifier("rehearseRouteLink")
+        } footer: {
+            Text("Step through every turn of this route and hear its cue through your headset before you leave.")
+        }
+
+        Section {
+            Button {
+                planName = RideView.title(pending)
+                namingPlan = true
+            } label: {
+                Label("Save as a ride plan", systemImage: "bookmark")
+            }
+            .accessibilityIdentifier("savePlanButton")
+            if let planMessage {
+                Text(planMessage).font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("planMessage")
+            }
+        } footer: {
+            Text("Keeps this destination, its stop and the toll and highway choices together for another day.")
+        }
+        .alert("Name this ride plan", isPresented: $namingPlan) {
+            TextField("Name", text: $planName)
+            Button("Save") {
+                planMessage = model.savePlan(named: planName) ?? "Saved. Find it under Ride plans on the Ride tab."
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+
         PreRideReady()
     }
 
@@ -243,6 +294,7 @@ private struct RouteChoice: View {
         } label: {
             Label("Start", systemImage: "location.fill")
                 .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.borderedProminent)
@@ -419,6 +471,15 @@ private struct Navigating: View {
 struct TurnCard: View {
     let snapshot: NavigationSnapshot?
     var eligible = true
+
+    /// A step of a route that is not being ridden, shown the way a turn is.
+    init(snapshot: NavigationSnapshot?, eligible: Bool = true, rehearsal: GuidanceStep? = nil) {
+        self.snapshot = rehearsal.map {
+            NavigationSnapshot(session: SessionID(), generation: RouteGeneration(0),
+                               observedAt: MonotonicInstant(offset: .zero), state: .active, step: $0)
+        } ?? snapshot
+        self.eligible = eligible
+    }
 
     var body: some View {
         HStack(spacing: 16) {

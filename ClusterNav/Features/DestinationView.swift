@@ -82,6 +82,33 @@ struct DestinationPicker: View {
 
             WaitingDestinations()
 
+            if !model.plans.items.isEmpty {
+                Section {
+                    ForEach(model.plans.items) { plan in
+                        Button {
+                            model.usePlan(plan)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath.fill")
+                                    .foregroundStyle(Color.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(plan.name).foregroundStyle(Color.primary)
+                                    Text(plan.summary).font(.caption).foregroundStyle(Color.secondary)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("plan-\(plan.name)")
+                        .swipeActions {
+                            Button("Delete", role: .destructive) { model.deletePlan(plan.id) }
+                        }
+                    }
+                } header: {
+                    Text("Ride plans")
+                } footer: {
+                    Text("A plan keeps the destination, stop and route choices. The route itself is calculated fresh from where you are, and Avoid tolls and Avoid highways are set to the plan's choices.")
+                }
+            }
+
             if !model.places.recents.isEmpty {
                 Section("Recent") {
                     ForEach(model.places.recents) { place in
@@ -285,6 +312,7 @@ struct DestinationConfirmation: View {
                 } footer: {
                     Text(String(format: "%.6f, %.6f", pending.coordinate.latitude, pending.coordinate.longitude))
                         .font(.caption.monospaced())
+                        .accessibilityIdentifier("destinationCoordinate")
                 }
 
                 Section {

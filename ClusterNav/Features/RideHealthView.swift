@@ -121,6 +121,7 @@ struct AtStop: View {
             } label: {
                 Label("Continue to \(RideView.title(pending))", systemImage: "location.fill")
                     .font(.headline)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)

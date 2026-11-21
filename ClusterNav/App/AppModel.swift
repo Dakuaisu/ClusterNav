@@ -31,6 +31,14 @@ final class AppModel {
         var inboxItem: UUID?
     }
 
+    /// Looking for fuel or a rest stop along the previewed route.
+    enum StopSearch: Equatable {
+        case idle
+        case searching(StopKind)
+        case results(StopKind, [StopSuggestion])
+        case failed(String)
+    }
+
     enum Tab: Hashable {
         case ride, map, bike, history, diagnostics
     }
@@ -92,6 +100,10 @@ final class AppModel {
     private(set) var recoveryOffer: RecoveryOffer?
     let search = PlaceSearch()
     private(set) var places: SavedPlaces
+    private(set) var plans: RidePlanList
+    private(set) var stopSearch: StopSearch = .idle
+    @ObservationIgnored var stopFinder: StopFinderClient = MapKitStopFinder()
+    @ObservationIgnored private var stopSearchToken: UUID?
     /// Shown when a shared or pasted link has no usable location.
     var linkMessage: String?
     var voiceEnabled: Bool {
@@ -219,6 +231,7 @@ final class AppModel {
     private static let statusProfileKey = "statusProfile"
     private static let simulationKey = "simulationMode"
     private static let placesKey = "savedPlaces"
+    private static let plansKey = "ridePlans"
     private static let voiceKey = "voiceGuidance"
     private static let voiceStyleKey = "voiceStyle"
     private static let routePreferencesKey = "routePreferences"
@@ -262,6 +275,8 @@ final class AppModel {
         coordinator.statusProfile = profile
         places = defaults.data(forKey: Self.placesKey)
             .flatMap { try? JSONDecoder().decode(SavedPlaces.self, from: $0) } ?? SavedPlaces()
+        plans = defaults.data(forKey: Self.plansKey)
+            .flatMap { try? JSONDecoder().decode(RidePlanList.self, from: $0) } ?? RidePlanList()
         voiceEnabled = defaults.object(forKey: Self.voiceKey) as? Bool ?? true
         let style = defaults.string(forKey: Self.voiceStyleKey).flatMap(VoiceStyle.init(rawValue:)) ?? .detailed
         voiceStyle = style
@@ -478,6 +493,159 @@ final class AppModel {
             .filter { seen.insert($0.coordinate).inserted }
     }
 
+    // MARK: Stops along the route
+
+    /// Whether the previewed ride can take a suggested stop: a live first preview with no stop yet.
+    var canSuggestStops: Bool {
+        guard mode == .live, case .preview(let pending) = stage, pending.stop == nil else { return false }
+        return proposal?.reason == .initial
+    }
+
+    /// Searches Apple Maps around the previewed route and ranks what it finds by the
+    /// minutes each stop adds. Explicit rider action only; one search at a time.
+    func findStops(_ kind: StopKind) {
+        stopFinder.cancel()
+        guard canSuggestStops, case .preview(let pending) = stage, let proposal, let selectedRouteID,
+              let base = routeOptions.first(where: { $0.id == selectedRouteID })?.expectedSeconds,
+              let line = provider?.routeLine(proposal.handle, option: selectedRouteID), let origin = line.first,
+              line.count >= 2 else {
+            stopSearch = .failed("Stops can be suggested only for a route that is open and has no stop yet.")
+            return
+        }
+        let token = UUID()
+        stopSearchToken = token
+        stopSearch = .searching(kind)
+        let preferences = proposal.context.preferences
+        stopFinder.places(kind, near: StopPlanner.searchPoints(along: line),
+                          radius: StopPlanner.searchRadius(along: line)) { [weak self] found in
+            guard let self, stopSearchToken == token, self.proposal?.handle == proposal.handle else { return }
+            guard let found else {
+                stopSearch = .failed("Couldn't search Apple Maps. Check your connection and try again.")
+                return
+            }
+            let shortlist = StopPlanner.shortlist(found, along: line)
+            guard !shortlist.isEmpty else {
+                stopSearch = .results(kind, [])
+                return
+            }
+            let timing = StopTiming(outstanding: shortlist.count)
+            for item in shortlist {
+                stopFinder.travelSeconds(from: origin, via: item.candidate.coordinate, to: pending.coordinate,
+                                         preferences: preferences) { [weak self] seconds in
+                    guard let self, stopSearchToken == token, self.proposal?.handle == proposal.handle else { return }
+                    if let seconds { timing.timed.append((item.candidate, item.offRouteMetres, seconds)) }
+                    timing.outstanding -= 1
+                    guard timing.outstanding == 0 else { return }
+                    stopSearch = timing.timed.isEmpty
+                        ? .failed("Apple Maps couldn't time the detours. Try again in a moment.")
+                        : .results(kind, StopPlanner.ranked(timing.timed, baseSeconds: base))
+                }
+            }
+        }
+    }
+
+    func cancelStopSearch() {
+        stopFinder.cancel()
+        stopSearchToken = nil
+        stopSearch = .idle
+    }
+
+    /// Adds the suggested stop to the previewed ride and plans it again, to the stop
+    /// first. The usual preview follows; nothing starts by itself.
+    func chooseStop(_ suggestion: StopSuggestion) {
+        guard canSuggestStops, case .preview(var pending) = stage, let old = proposal else { return }
+        let stop = RideDestination(coordinate: suggestion.coordinate, label: suggestion.name, provenance: .searchResult)
+        guard let context = RideContext(id: old.context.id,
+                                        itinerary: Itinerary(final: old.context.itinerary.final, stop: stop),
+                                        preferences: old.context.preferences) else { return }
+        cancelStopSearch()
+        provider?.discardPrepared(old.handle)
+        old.expiry.cancel()
+        proposal = nil
+        startStatus = .idle
+        pending.stop = stop
+        requestRoute(.initial, context: context, pending: pending)
+    }
+
+    @MainActor
+    private final class StopTiming {
+        var outstanding: Int
+        var timed: [(candidate: StopCandidate, offRouteMetres: Double, viaSeconds: Double)] = []
+
+        init(outstanding: Int) {
+            self.outstanding = outstanding
+        }
+    }
+
+    // MARK: Route rehearsal
+
+    /// The previewed route's maneuvers in order, to step through while parked. Empty
+    /// outside a preview. Reads what was already calculated; requests nothing.
+    var rehearsalSteps: [GuidanceStep] {
+        guard case .preview = stage else { return [] }
+        if mode == .simulation { return RouteRehearsal.steps(for: FixtureRoute.demo) }
+        guard let proposal, let selectedRouteID else { return [] }
+        return provider?.rehearsalSteps(proposal.handle, option: selectedRouteID) ?? []
+    }
+
+    /// Speaks one step's cue on the audio output in use now. Only in a preview: never
+    /// over a ride's own directions.
+    func hearRehearsalCue(_ step: GuidanceStep) {
+        guard case .preview = stage, let text = RouteRehearsal.cue(for: step, style: voiceStyle) else { return }
+        voice.speakSample(text)
+    }
+
+    // MARK: Ride plans
+
+    /// Saves the previewed ride (destination, stop and the route choices it was planned
+    /// with) for another day. Nil on success, otherwise why not.
+    func savePlan(named name: String) -> String? {
+        guard case .preview(let pending) = stage else { return "Open a route preview first." }
+        let label = FavouritesList.normalised(pending.label, fallback: pending.coordinate)
+        let plan = RidePlan(name: name, destination: Favourite(label: label, coordinate: pending.coordinate),
+                            stop: pending.stop.map {
+                                Favourite(label: FavouritesList.normalised($0.label, fallback: $0.coordinate),
+                                          coordinate: $0.coordinate)
+                            },
+                            preferences: (proposal?.context ?? ride)?.preferences ?? routePreferences)
+        guard plans.save(plan) else { return "You already have \(RidePlanList.maxPlans) ride plans. Delete one first." }
+        persistPlans()
+        return nil
+    }
+
+    func deletePlan(_ id: UUID) {
+        plans.remove(id)
+        persistPlans()
+    }
+
+    /// Plans the ride again from where the rider is now: a fresh route with the plan's
+    /// own stop and route choices, then the usual preview. Nothing starts by itself.
+    func usePlan(_ plan: RidePlan) {
+        guard stage == .choosing || isFailed else { return }
+        let final = RideDestination(coordinate: plan.destination.coordinate, label: plan.destination.label,
+                                    provenance: .saved)
+        let stop = plan.stop.map { RideDestination(coordinate: $0.coordinate, label: $0.label, provenance: .saved) }
+        guard let context = RideContext(itinerary: Itinerary(final: final, stop: stop),
+                                        preferences: plan.preferences) else { return }
+        var pending = PendingDestination(coordinate: plan.destination.coordinate, label: plan.destination.label,
+                                         provenance: .saved)
+        pending.stop = stop
+        // Every calculation, reroutes included, follows the current route settings, so
+        // the plan's choices become the current ones.
+        routePreferences = plan.preferences
+        stage = .confirming(pending)
+        places.recordRecent(label: pending.label, coordinate: pending.coordinate)
+        persistPlaces()
+        switch mode {
+        case .simulation: beginSimulatedRoute(pending, context: context)
+        case .live: requestRoute(.initial, context: context, pending: pending)
+        }
+    }
+
+    private func persistPlans() {
+        defaults.set(try? JSONEncoder().encode(plans), forKey: Self.plansKey)
+    }
+
     private func persistPlaces() {
         defaults.set(try? JSONEncoder().encode(places), forKey: Self.placesKey)
     }
@@ -616,6 +784,7 @@ final class AppModel {
     }
 
     private func showOptions(_ options: [RouteOption], for pending: PendingDestination) {
+        cancelStopSearch()
         routeOptions = options
         selectedRouteID = options.first?.id
         stage = .preview(pending)
