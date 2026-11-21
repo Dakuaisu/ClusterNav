@@ -127,6 +127,8 @@ public final class SessionCoordinator {
     private var lastStatusSentAt: MonotonicInstant?
     private var heartbeat = HeartbeatCounter()
     private var diagnosticFrame: (frame: [UInt8], startedAt: MonotonicInstant)?
+    private var reroute: (id: UUID, session: SessionID, generation: RouteGeneration)?
+    private var awaitMeasurementAfterReroute: MonotonicInstant?
 
     public init(clock: RideClock, configuration: SessionConfiguration = SessionConfiguration()) {
         self.clock = clock
@@ -144,6 +146,8 @@ public final class SessionCoordinator {
     // MARK: Navigation side
 
     public func beginSession(_ session: SessionID) {
+        reroute = nil
+        awaitMeasurementAfterReroute = nil
         machine.begin(session)
         sync()
     }
@@ -151,6 +155,8 @@ public final class SessionCoordinator {
     /// Explicit replacement route; callbacks from older generations are ignored afterwards.
     @discardableResult
     public func replaceRoute() -> RouteGeneration {
+        reroute = nil
+        awaitMeasurementAfterReroute = nil
         let generation = machine.advanceGeneration()
         sync()
         return generation
@@ -158,6 +164,8 @@ public final class SessionCoordinator {
 
     /// Authoritative stop: clears immediately and ends the session.
     public func endSession() {
+        reroute = nil
+        awaitMeasurementAfterReroute = nil
         machine.end()
         sync()
     }
@@ -167,9 +175,27 @@ public final class SessionCoordinator {
         let result = machine.accept(snapshot)
         if case .failure = result {
             rejectedSnapshots += 1
+        } else if snapshot.state == .active, let boundary = awaitMeasurementAfterReroute,
+                  let measured = snapshot.measurementAt, measured > boundary, measured <= clock.now {
+            awaitMeasurementAfterReroute = nil
         }
         sync()
         return result
+    }
+
+    /// Only the owner of an authorized live reroute may hold this signal. It is tied to
+    /// the route generation current now, so it can't outlive the route it replaces.
+    public func beginReroute(id: UUID, session: SessionID) {
+        guard machine.session == session, reroute == nil else { return }
+        reroute = (id, session, machine.generation)
+        sync()
+    }
+
+    public func endReroute(id: UUID) {
+        guard reroute?.id == id else { return }
+        reroute = nil
+        awaitMeasurementAfterReroute = clock.now
+        sync()
     }
 
     // MARK: Parked diagnostics
@@ -316,7 +342,21 @@ public final class SessionCoordinator {
     func evaluate() -> DashboardIntent {
         guard machine.session != nil else { return .clear(.noSession) }
         guard let snapshot = machine.latest else { return .clear(.notGuiding(machine.state)) }
+        // Only while the rider is actually off the route: a recalculation asked for on
+        // the route keeps showing its still-valid turn until the new route is committed.
+        if let reroute, reroute.session == machine.session, reroute.generation == machine.generation,
+           snapshot.state == .rerouting {
+            guard let measured = snapshot.measurementAt, measured <= clock.now,
+                  clock.now < measured + configuration.freshness else { return .clear(.stale) }
+            let fields = TbtFields(frameType: .navigation, icon: ClusterIcon.wrongWay, isAM: true,
+                                   stepMetres: 0, totalMetres: 0, etaHour: 0, etaMinute: 0)
+            do { return .guidance(fields, frame: try TbtFrame.encode(fields)) }
+            catch { return .clear(.invalidValues(error)) }
+        }
         guard snapshot.state.allowsGuidance else { return .clear(.notGuiding(snapshot.state)) }
+        if snapshot.state == .active, awaitMeasurementAfterReroute != nil {
+            return .clear(.notGuiding(.rerouting))
+        }
         guard clock.now < (snapshot.measurementAt ?? snapshot.observedAt) + configuration.freshness else {
             return .clear(.stale)
         }

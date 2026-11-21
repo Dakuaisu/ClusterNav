@@ -109,6 +109,72 @@ struct SessionCoordinatorTests {
         #expect(c.intent == .clear(.notGuiding(state)))
     }
 
+    @Test func authorizedReroutePacketIsFreshScopedAndClearsBeforeNewGuidance() throws {
+        let (c, pump) = makeCoordinator()
+        let session = SessionID()
+        let id = UUID()
+        c.beginSession(session)
+        c.linkReady(pump)
+        ack(pump)
+        var snapshot = active(c)
+        snapshot.measurementAt = clock.now
+        c.receive(snapshot)
+        ack(pump)
+        c.beginReroute(id: id, session: SessionID())
+        #expect(TbtFrameSummary(frame: transport.navigationWrites.last!)?.icon == ClusterIcon.turnLeft)
+        c.beginReroute(id: id, session: session)
+        #expect(TbtFrameSummary(frame: transport.navigationWrites.last!)?.icon == ClusterIcon.turnLeft,
+                "a recalculation requested on the route keeps the valid turn")
+        snapshot.state = .rerouting
+        c.receive(snapshot)
+        let frame = try #require(transport.navigationWrites.last)
+        #expect(frame.count == 48 && frame[1] == 66 && TbtFrame.hasValidChecksum(frame))
+        let summary = try #require(TbtFrameSummary(frame: frame))
+        #expect(summary.stepText == "0 m" && summary.totalText == "0 m" && summary.text.isEmpty)
+        c.endReroute(id: UUID())
+        #expect(transport.navigationWrites.last == frame)
+        c.endReroute(id: id)
+        ack(pump)
+        #expect(transport.navigationWrites.last == TbtFrame.stop())
+        ack(pump)
+        snapshot.state = .active
+        c.receive(snapshot)
+        #expect(transport.navigationWrites.last == TbtFrame.stop())
+        clock.advance(by: .milliseconds(1))
+        snapshot.observedAt = clock.now
+        snapshot.measurementAt = clock.now
+        c.receive(snapshot)
+        #expect(TbtFrameSummary(frame: transport.navigationWrites.last!)?.icon == ClusterIcon.turnLeft)
+    }
+
+    @Test func rerouteNeedsActualFreshMeasurementAndCannotOutliveSession() {
+        let (c, pump) = makeCoordinator()
+        let session = SessionID()
+        let id = UUID()
+        c.beginSession(session)
+        c.linkReady(pump)
+        ack(pump)
+        var snapshot = active(c, state: .rerouting)
+        c.receive(snapshot)
+        c.beginReroute(id: id, session: session)
+        #expect(c.intent == .clear(.stale))
+        snapshot.measurementAt = clock.now
+        c.receive(snapshot)
+        #expect(TbtFrameSummary(frame: transport.navigationWrites.last!)?.icon == 66)
+        ack(pump)
+        clock.advance(by: .seconds(5))
+        c.tick()
+        #expect(c.intent == .clear(.stale))
+        #expect(transport.navigationWrites.last == TbtFrame.stop())
+        c.endSession()
+        c.beginSession(SessionID())
+        snapshot.session = c.session!
+        snapshot.observedAt = clock.now
+        snapshot.measurementAt = clock.now
+        c.receive(snapshot)
+        #expect(c.intent == .clear(.notGuiding(.rerouting)))
+    }
+
     @Test func missingStepAndUnsupportedManeuverClearInsteadOfGuessing() {
         let (c, pump) = makeCoordinator()
         c.beginSession(SessionID())
