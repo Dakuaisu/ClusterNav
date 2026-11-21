@@ -9,7 +9,8 @@ struct BikeView: View {
             List {
                 Section {
                     VStack(spacing: 12) {
-                        Image(systemName: model.bike.state.isReady ? "checkmark.circle.fill" : "bolt.horizontal.circle")
+                        Image(systemName: model.bike.state.isReady ? "checkmark.circle.fill"
+                              : "antenna.radiowaves.left.and.right.slash")
                             .font(.system(size: 56))
                             .foregroundStyle(model.bike.state.isReady ? .green : .orange)
                         Text(LinkStatusRow.text(model.bike.state))
@@ -89,6 +90,18 @@ struct BikeView: View {
                 .buttonStyle(.bordered)
         case .connecting, .discovering, .reconnecting:
             ProgressView()
+        case .unavailable(.unauthorized):
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            } label: {
+                Text("Open Settings").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+        case .unavailable(.poweredOff):
+            Text("Turn Bluetooth on in Control Centre or Settings, then scan for the bike.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         default:
             if model.bike.rememberedBikeID != nil {
                 Button {

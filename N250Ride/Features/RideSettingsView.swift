@@ -19,6 +19,7 @@ struct RideSettingsView: View {
                         Text("Concise").tag(VoiceStyle.concise)
                     }
                     .pickerStyle(.segmented)
+                    .disabled(!model.voiceEnabled)
                     .accessibilityIdentifier("voiceStylePicker")
                     LabeledContent("Plays through", value: model.voice.outputName)
                     if let reason = model.voice.holdReason {
@@ -158,9 +159,13 @@ struct RideHistoryView: View {
                 Text("GPS recording is separate from ride summaries and is off by default.")
             }
 
-            Section("Ride summaries") {
+            Section {
+                Toggle("Keep ride history", isOn: Binding(get: { model.history.enabled },
+                                                          set: { model.history.setEnabled($0) }))
+                    .accessibilityIdentifier("historyTabToggle")
                 if model.history.rides.isEmpty {
-                    Text(model.history.enabled ? "No rides yet." : "History is off. Turn it on in Ride settings.")
+                    Text(model.history.enabled ? "No rides yet. Your next ride will appear here."
+                         : "Turn this on to keep a summary of your next ride.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(model.history.rides) { ride in
@@ -181,6 +186,10 @@ struct RideHistoryView: View {
                     Button("Discard stored history", role: .destructive) { confirmingDiscard = true }
                         .accessibilityIdentifier("discardHistoryButton")
                 }
+            } header: {
+                Text("Ride summaries")
+            } footer: {
+                Text("Only the date, ride time and an estimated distance, on this phone, for 30 days. Never positions.")
             }
             if !model.history.rides.isEmpty {
                 Section {
@@ -191,7 +200,7 @@ struct RideHistoryView: View {
                 }
             }
         }
-        .navigationTitle("Ride history")
+        .navigationTitle("History")
         .confirmationDialog("Delete every saved ride?", isPresented: $confirmingDeleteAll, titleVisibility: .visible) {
             Button("Delete all", role: .destructive) { model.history.deleteAll() }
         }

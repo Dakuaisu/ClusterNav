@@ -80,6 +80,8 @@ struct DestinationPicker: View {
                 }
             }
 
+            WaitingDestinations()
+
             if !model.places.recents.isEmpty {
                 Section("Recent") {
                     ForEach(model.places.recents) { place in
@@ -214,7 +216,7 @@ private struct ShortcutButton: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 84)
-            .background(.background, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
         .foregroundStyle(place == nil ? Color.secondary : Color.accentColor)
@@ -260,13 +262,16 @@ struct DestinationConfirmation: View {
                         .accessibilityIdentifier("labelField")
                     Toggle("Save as favourite", isOn: $saveAsFavourite)
                         .accessibilityIdentifier("saveFavouriteToggle")
-                    Picker("Shortcut", selection: $shortcut) {
-                        Text("None").tag(AppModel.Shortcut?.none)
-                        Text("Home").tag(AppModel.Shortcut?.some(.home))
-                        Text("Work").tag(AppModel.Shortcut?.some(.work))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Set as a one-tap shortcut")
+                        Picker("Shortcut", selection: $shortcut) {
+                            Text("None").tag(AppModel.Shortcut?.none)
+                            Text("Home").tag(AppModel.Shortcut?.some(.home))
+                            Text("Work").tag(AppModel.Shortcut?.some(.work))
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("shortcutPicker")
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("shortcutPicker")
                     let stops = model.stopCandidates.filter { $0.coordinate != pending.coordinate }
                     if !stops.isEmpty {
                         Picker("Stop on the way", selection: $stopID) {

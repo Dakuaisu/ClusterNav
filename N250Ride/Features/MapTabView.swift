@@ -46,7 +46,7 @@ struct MapTabView: View {
         case .choosing, .confirming, .failed: "Long-press to set a destination"
         case .requesting: "Finding routes…"
         case .preview: "Tap a route to select it"
-        case .navigating: "Navigating"
+        case .navigating: model.mode == .simulation ? "Simulated ride - not drawn on the map" : "Navigating"
         case .atStop: "At your stop"
         }
     }

@@ -21,7 +21,6 @@ struct RideView: View {
                 switch model.stage {
                 case .choosing, .confirming:
                     if model.recoveryOffer != nil { RecoveryPrompt() }
-                    WaitingDestinations()
                     DestinationPicker()
                 case .requesting(let pending):
                     Section {
@@ -108,10 +107,17 @@ private struct StatusChips: View {
     var body: some View {
         Section {
             HStack(spacing: 8) {
-                Chip(text: model.bike.state.isReady ? "Bike connected" : "Bike not connected",
-                     systemImage: model.bike.state.isReady ? "checkmark.circle.fill" : "bolt.horizontal.circle",
-                     tint: model.bike.state.isReady ? .green : .orange)
-                    .accessibilityIdentifier("linkStatus")
+                Button {
+                    model.selectedTab = .bike
+                } label: {
+                    Chip(text: model.bike.state.isReady ? "Bike connected" : "Bike not connected",
+                         systemImage: model.bike.state.isReady ? "checkmark.circle.fill"
+                             : "antenna.radiowaves.left.and.right.slash",
+                         tint: model.bike.state.isReady ? .green : .orange)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the Bike tab")
+                .accessibilityIdentifier("linkStatus")
                 if model.mode == .simulation {
                     Chip(text: "Simulation", systemImage: "testtube.2", tint: .purple)
                         .accessibilityIdentifier("simulationBadge")
@@ -214,7 +220,12 @@ private struct RouteChoice: View {
                     Button("Recalculate") { model.recalculatePreview() }
                 }
             }
+        }
+
+        Section {
             startButton
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
         }
 
         Section {
@@ -390,6 +401,7 @@ private struct Navigating: View {
             } label: {
                 Label("End ride", systemImage: "stop.fill")
                     .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
