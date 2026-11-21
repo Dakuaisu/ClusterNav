@@ -56,6 +56,105 @@ struct CoreReplayTests {
         for _ in 0..<100 { #expect(CoreReplayRunner().run(trace) == first) }
     }
 
+    @Test func longStraightKeepsGuidanceAndAdvancesToTurn() throws {
+        let route = PlannedRoute(steps: [
+            PlannedStep(points: [at(0, 0)], instructions: ""),
+            PlannedStep(points: [at(0, 0), at(0, 3_500)], instructions: "Continue straight"),
+            PlannedStep(points: [at(0, 3_500), at(0, 5_000)], instructions: "Turn right"),
+            PlannedStep(points: [at(0, 5_000), at(500, 5_000)], instructions: "Arrive at the destination"),
+        ], expectedTravelSeconds: 400)
+        var events = [#"{"offset":0,"ordinal":0,"kind":"linkReady"}"#,
+                      #"{"offset":0,"ordinal":1,"kind":"ack"}"#]
+        for i in 0...140 {
+            let time = 100 + i * 2_000
+            events.append("{\"offset\":\(time),\"ordinal\":0,\"kind\":\"location\",\"x\":0,\"y\":\(i * 30),\"accuracy\":5}")
+            events.append("{\"offset\":\(time),\"ordinal\":1,\"kind\":\"ack\"}")
+        }
+        let trace = try ReplayTrace.load("{\"schemaVersion\":1,\"events\":[\(events.joined(separator: ","))]}")
+        let runner = CoreReplayRunner(route: route)
+        let log = runner.run(trace)
+        #expect(log == CoreReplayRunner(route: route).run(trace))
+        #expect(runner.snapshots.count == 141)
+        for (i, snapshot) in runner.snapshots.enumerated() {
+            let expected: Maneuver = i * 30 < 3_500 ? .straight : .turnRight
+            #expect(snapshot.state == .active && snapshot.step?.maneuver == expected, "fix \(i)")
+            guard case .guidance(let fields, let frame) = runner.intents[2 + i * 2] else {
+                Issue.record("missing guidance at fix \(i)")
+                continue
+            }
+            #expect(fields.icon == ManeuverMapper.icon(for: expected, stepMetres: snapshot.step!.distanceMetres))
+            #expect(runner.navigationWrites.contains(frame), "guidance was not sent at fix \(i)")
+        }
+    }
+
+    @Test func projectionClampsToSearchWindowOnLongSegment() throws {
+        let line = try #require(RoutePolyline([at(0, 0), at(0, 5_000)]))
+        let before = try #require(line.project(at(3, 90), within: 100, 200))
+        #expect(abs(before.along - 100) < 0.01)
+        #expect(abs(before.offset - (109.0).squareRoot()) < 0.01)
+        let after = try #require(line.project(at(4, 210), within: 100, 200))
+        #expect(abs(after.along - 200) < 0.01)
+        #expect(abs(after.offset - (116.0).squareRoot()) < 0.01)
+        #expect(line.project(at(0, 100), within: 5_100, 5_200) == nil)
+        #expect(line.project(at(0, 100), within: 200, 100) == nil)
+    }
+
+    @Test func fixesJustBeyondInitialWindowStayOnLongSegment() throws {
+        let route = PlannedRoute(steps: [
+            PlannedStep(points: [at(0, 0), at(0, 3_500)], instructions: "Continue straight"),
+            PlannedStep(points: [at(0, 3_500), at(0, 5_000)], instructions: "Arrive"),
+        ], expectedTravelSeconds: 400)
+        let trace = try ReplayTrace.load(#"""
+        {"schemaVersion":1,"events":[
+          {"offset":0,"ordinal":0,"kind":"linkReady"},
+          {"offset":0,"ordinal":1,"kind":"ack"},
+          {"offset":100,"ordinal":0,"kind":"location","y":410},
+          {"offset":100,"ordinal":1,"kind":"ack"},
+          {"offset":2100,"ordinal":0,"kind":"location","y":410},
+          {"offset":2100,"ordinal":1,"kind":"ack"},
+          {"offset":4100,"ordinal":0,"kind":"location","y":410}
+        ]}
+        """#)
+        let runner = CoreReplayRunner(route: route)
+        _ = runner.run(trace)
+        #expect(runner.snapshots.allSatisfy { $0.state == .active && $0.step?.maneuver == .straight })
+        guard case .guidance(let fields, _) = runner.intents.last else {
+            Issue.record("in-window boundary is close enough for guidance, not rerouting")
+            return
+        }
+        #expect(fields.icon == ClusterIcon.straight)
+
+        let tooFar = try ReplayTrace.load(#"""
+        {"schemaVersion":1,"events":[
+          {"offset":100,"ordinal":0,"kind":"location","y":460},
+          {"offset":2100,"ordinal":0,"kind":"location","y":460},
+          {"offset":4100,"ordinal":0,"kind":"location","y":460}
+        ]}
+        """#)
+        let outside = CoreReplayRunner(route: route)
+        _ = outside.run(tooFar)
+        #expect(outside.snapshots.last?.state == .rerouting, "the bounded point is beyond off-route tolerance")
+    }
+
+    @Test func genuinelyConflictingTurnIsClearedRatherThanShownStraight() throws {
+        let route = PlannedRoute(steps: [
+            PlannedStep(points: [at(0, 0), at(0, 3_500)], instructions: "Turn left"),
+            PlannedStep(points: [at(0, 3_500), at(500, 3_500)], instructions: "Arrive"),
+        ], expectedTravelSeconds: 400)
+        let trace = try ReplayTrace.load(#"""
+        {"schemaVersion":1,"events":[
+          {"offset":0,"ordinal":0,"kind":"linkReady"},
+          {"offset":0,"ordinal":1,"kind":"ack"},
+          {"offset":100,"ordinal":0,"kind":"location","y":100}
+        ]}
+        """#)
+        let runner = CoreReplayRunner(route: route)
+        _ = runner.run(trace)
+        #expect(runner.snapshots.last?.step?.maneuver == .unsupported)
+        #expect(runner.intents.last == .clear(.unsupportedManeuver))
+        #expect(runner.navigationWrites.last == TbtFrame.stop())
+    }
+
     @Test func malformedTracesAreRejected() {
         #expect(throws: ReplayTrace.Invalid.self) {
             try ReplayTrace.load(#"{"schemaVersion": 2, "events": []}"#)

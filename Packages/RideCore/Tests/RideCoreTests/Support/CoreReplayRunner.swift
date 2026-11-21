@@ -62,12 +62,15 @@ final class CoreReplayRunner {
     private var admission = LocationAdmission()
     private var pump: ClusterWritePump?
     private(set) var log: [String] = []
+    private(set) var snapshots: [NavigationSnapshot] = []
+    private(set) var intents: [DashboardIntent] = []
+    var navigationWrites: [[UInt8]] { transport.navigationWrites }
 
-    init() {
+    init(route: PlannedRoute = cityRoute) {
         coordinator = SessionCoordinator(clock: clock, configuration: SessionConfiguration(timeZone: TimeZone(identifier: "UTC")!))
         let session = SessionID(UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
         coordinator.beginSession(session)
-        engine = GuidanceEngine(route: cityRoute, session: session, generation: coordinator.generation)!
+        engine = GuidanceEngine(route: route, session: session, generation: coordinator.generation)!
         coordinator.onWriteEvent = { [weak self] in self?.log.append("event \($0)") }
     }
 
@@ -79,6 +82,7 @@ final class CoreReplayRunner {
                 now = event.offset
             }
             apply(event)
+            intents.append(coordinator.intent)
             log.append("t=\(now) \(event.kind.rawValue): \(describe(coordinator.intent)) delivery=\(coordinator.delivery) writes=\(transport.writes.count)")
         }
         return log
@@ -92,7 +96,9 @@ final class CoreReplayRunner {
                                         timestamp: clock.wallNow.addingTimeInterval(-Double(event.age ?? 0) / 1_000))
             switch admission.admit(sample, receiptWall: clock.wallNow, receiptMonotonic: clock.now) {
             case .success(let fix):
-                coordinator.receive(engine.update(fix.fix).snapshot)
+                let snapshot = engine.update(fix.fix).snapshot
+                snapshots.append(snapshot)
+                coordinator.receive(snapshot)
             case .failure(let reason):
                 log.append("rejected \(reason)")
             }

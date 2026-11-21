@@ -46,14 +46,16 @@ struct RoutePolyline: Sendable {
 
     /// Closest point to `c` on the part of the line between `lower` and `upper` metres.
     func project(_ c: Coordinate, within lower: Double, _ upper: Double) -> (along: Double, offset: Double)? {
+        guard lower <= upper else { return nil }
         let p = local(c)
         var best: (along: Double, offset: Double)?
         for i in 0..<(xy.count - 1) where cumulative[i + 1] >= lower && cumulative[i] <= upper {
             let a = xy[i], ab = xy[i + 1] - a
             let segment = cumulative[i + 1] - cumulative[i]
-            let t = min(max(Self.dot(p - a, ab) / (segment * segment), 0), 1)
+            let minT = max((lower - cumulative[i]) / segment, 0)
+            let maxT = min((upper - cumulative[i]) / segment, 1)
+            let t = min(max(Self.dot(p - a, ab) / (segment * segment), minT), maxT)
             let along = cumulative[i] + t * segment
-            guard along >= lower, along <= upper else { continue }
             let offset = Self.length(p - (a + ab * t))
             if best == nil || offset < best!.offset { best = (along, offset) }
         }
