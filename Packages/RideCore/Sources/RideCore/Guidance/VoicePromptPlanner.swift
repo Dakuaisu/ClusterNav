@@ -83,6 +83,14 @@ public struct VoicePromptPlanner: Sendable {
         return "In \(Self.spoken(next.distanceMetres)), \(phrase(next))."
     }
 
+    /// The current instruction for a cue that was due but not heard: worded as the
+    /// final cue when the maneuver is that close, otherwise with the current distance.
+    public func resumePrompt(for snapshot: NavigationSnapshot) -> String? {
+        guard let text = repeatPrompt(for: snapshot), let next = snapshot.step else { return nil }
+        if next.maneuver != .straight, next.distanceMetres <= Self.nowMetres { return "Now, \(phrase(next))." }
+        return text
+    }
+
     private mutating func plan(_ snapshot: NavigationSnapshot) -> String? {
         defer { lastState = snapshot.state }
         switch snapshot.state {
@@ -137,7 +145,7 @@ public struct VoicePromptPlanner: Sendable {
         Self.phrase(step, roads: style == .detailed)
     }
 
-    static func phrase(_ step: GuidanceStep, roads: Bool = true) -> String {
+    public static func phrase(_ step: GuidanceStep, roads: Bool = true) -> String {
         let road = roads ? step.roadText : nil
         let onto = road.map { " onto \($0)" } ?? ""
         switch step.maneuver {

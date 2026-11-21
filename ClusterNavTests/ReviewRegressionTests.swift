@@ -750,6 +750,38 @@ struct FourthReviewRegressionTests {
         var fail = false
     }
 
+    @Test func aCompletedRideWhoseFinalWriteFailedStaysCompletedAfterRelaunch() {
+        let storage = TestStorage.directory()
+        let defaults = UserDefaults(suiteName: "finish-\(UUID())")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let fail = FailSwitch()
+        let io = RecordIO(write: { data, url in
+            if fail.fail { throw CocoaError(.fileWriteOutOfSpace) }
+            try RecordIO.real.write(data, url)
+        }, excludeFromBackup: { try RecordIO.real.excludeFromBackup($0) })
+        let store = RideHistoryStore(directory: storage, now: now, defaults: defaults, io: io)
+        store.setEnabled(true)
+        let ride = RideID()
+        store.begin(ride, startedAt: now, now: now)
+        store.checkpoint(now: now.addingTimeInterval(30))
+        fail.fail = true
+        store.finish(.completed, now: now.addingTimeInterval(600))
+        #expect(store.rides.first?.outcome == .completed && store.problem != nil)
+
+        let reopened = RideHistoryStore(directory: storage, now: now.addingTimeInterval(700), defaults: defaults)
+        #expect(reopened.rides.map(\.id) == [ride])
+        #expect(reopened.rides.first?.outcome == .completed, "not downgraded to interrupted")
+        #expect(reopened.rides.first?.lastObservedAt == now.addingTimeInterval(600))
+        let again = RideHistoryStore(directory: storage, now: now.addingTimeInterval(800), defaults: defaults)
+        #expect(again.rides.first?.outcome == .completed)
+
+        let other = RideID()
+        again.begin(other, startedAt: now.addingTimeInterval(900), now: now.addingTimeInterval(900))
+        again.checkpoint(now: now.addingTimeInterval(930))
+        let crashed = RideHistoryStore(directory: storage, now: now.addingTimeInterval(1_000), defaults: defaults)
+        #expect(crashed.rides.first { $0.id == other }?.outcome == .interrupted, "a real interruption is still one")
+    }
+
     @Test func failedOptOutStillHoldsAfterRestart() {
         let storage = TestStorage.directory()
         let defaults = UserDefaults(suiteName: "r4d-\(UUID())")!
@@ -819,6 +851,50 @@ struct VoiceCutoffTests {
         voice.handle(snap(40, sequence: 4), eligible: true)
         #expect(speech.stops == 1, "the instruction for the turn already passed is cut")
         #expect(speech.texts.count == 2, "the next turn's prompt is spoken at once, not queued behind it")
+    }
+
+    @Test func aTurnThatCouldNotStartIsSpokenWhenAudioWorksAgain() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
+        audio.activationSucceeds = false
+        voice.handle(snap(40), eligible: true)
+        #expect(speech.texts.isEmpty)
+        audio.activationSucceeds = true
+        clock.advance(by: .seconds(1))
+        voice.handle(snap(30), eligible: true)
+        #expect(speech.texts.count == 1 && speech.texts[0].hasPrefix("Now, "), "the final cue is not lost")
+        voice.handle(snap(20), eligible: true)
+        #expect(speech.texts.count == 1, "and it is spoken once")
+    }
+
+    @Test func aTurnCutByAnInterruptionIsSpokenAgainWhenItEnds() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
+        voice.handle(snap(40), eligible: true)
+        audio.onInterruption?(true)
+        #expect(speech.stops == 1)
+        voice.handle(snap(30), eligible: true)
+        #expect(speech.texts.count == 1, "nothing is spoken while held")
+        audio.onInterruption?(false)
+        #expect(speech.texts.count == 2 && speech.texts[1].hasPrefix("Now, "))
+    }
+
+    @Test func aLostTurnIsNotSpokenOnceItsManeuverHasPassed() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
+        voice.handle(snap(40), eligible: true)
+        audio.onInterruption?(true)
+        voice.handle(snap(5_000, sequence: 4), eligible: true)
+        audio.onInterruption?(false)
+        #expect(speech.texts.count == 1)
+    }
+
+    @Test func aRehearsalSampleIsSpokenOutsideARideButNeverWhileAudioIsHeld() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
+        voice.speakSample("In 500 metres, turn right.")
+        voice.speakSample("In 400 metres, turn left.")
+        #expect(speech.texts == ["In 500 metres, turn right.", "In 400 metres, turn left."] && speech.stops == 1,
+                "the next sample replaces the one playing")
+        audio.onInterruption?(true)
+        voice.speakSample("Now, turn left.")
+        #expect(speech.texts.count == 2)
     }
 
     @Test func gpsLossAndRouteChangeStillCutIt() {

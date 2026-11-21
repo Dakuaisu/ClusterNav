@@ -62,6 +62,10 @@ final class VoiceGuide {
     @ObservationIgnored private var enabled = true
     @ObservationIgnored private var current: (tag: Int, prompt: VoicePrompt)?
     @ObservationIgnored private var pending: VoicePrompt?
+    /// A turn that was due but never finished being heard: audio couldn't start, or a
+    /// hold cut it. Its maneuver is spoken again, with the current distance, as soon as
+    /// audio is back and it is still the next maneuver.
+    @ObservationIgnored private var lost: VoicePrompt?
     @ObservationIgnored private var latest: NavigationSnapshot?
     @ObservationIgnored private var nextTag = 0
     @ObservationIgnored private var eligible = false
@@ -88,13 +92,17 @@ final class VoiceGuide {
 
     func setEnabled(_ on: Bool) {
         enabled = on
-        if !on { silence() }
+        if !on {
+            lost = nil
+            silence()
+        }
     }
 
     /// A new ride or leg: forget every stage spoken so far.
     func reset() {
         planner = VoicePromptPlanner(style: style)
         latest = nil
+        lost = nil
         silence()
     }
 
@@ -108,6 +116,7 @@ final class VoiceGuide {
     /// `eligible` is ride health's verdict: turns are spoken only on current guidance.
     func handle(_ snapshot: NavigationSnapshot, eligible: Bool) {
         if let latest, latest.session != snapshot.session || latest.generation != snapshot.generation {
+            lost = nil
             silence()
         }
         latest = snapshot
@@ -115,9 +124,22 @@ final class VoiceGuide {
         dropObsoleteTurns()
         // Held or stale turns are not planned at all, so a stage that was never
         // spoken can still be spoken once it is current and allowed again.
-        guard enabled, holds.isEmpty, eligible || snapshot.state != .active,
-              let prompt = planner.next(for: snapshot) else { return }
-        enqueue(prompt)
+        guard enabled, holds.isEmpty else { return }
+        if eligible || snapshot.state != .active, let prompt = planner.next(for: snapshot) {
+            if prompt.priority == .turn { lost = nil }
+            enqueue(prompt)
+        } else {
+            speakLost()
+        }
+    }
+
+    private func speakLost() {
+        guard enabled, holds.isEmpty, current == nil, let prompt = lost,
+              isCurrent(prompt, speaking: false), let latest,
+              let text = planner.resumePrompt(for: latest) else { return }
+        lost = nil
+        say(VoicePrompt(text: text, priority: .turn, session: prompt.session, generation: prompt.generation,
+                        step: prompt.step))
     }
 
     /// The current instruction again; refused while held or not current.
@@ -133,10 +155,22 @@ final class VoiceGuide {
         say(prompt)
     }
 
+    /// A sample outside a ride (the parked rehearsal), on whatever output is selected.
+    /// It replaces a sample still playing and is refused while audio is held.
+    func speakSample(_ text: String) {
+        guard holds.isEmpty else { return }
+        pending = nil
+        if current != nil {
+            current = nil
+            speech.stop()
+        }
+        say(VoicePrompt(text: text, priority: .status, session: SessionID(), generation: RouteGeneration(0)))
+    }
+
     /// A call never silences directions. The interruption it causes (in either order) is ignored.
     func callChanged(_ active: Bool) {
         callActive = active
-        if active { holds.remove(.interruption) }
+        if active { setHold(.interruption, false) }
     }
 
     /// Explicit permission to use the phone speaker after the headset went away.
@@ -164,6 +198,7 @@ final class VoiceGuide {
     private func say(_ prompt: VoicePrompt) {
         guard audio.activate() else {
             activationFailed = true
+            if prompt.priority == .turn { lost = prompt }
             return
         }
         activationFailed = false
@@ -197,6 +232,7 @@ final class VoiceGuide {
 
     private func dropObsoleteTurns() {
         if let pending, !isCurrent(pending, speaking: false) { self.pending = nil }
+        if let lost, !isCurrent(lost, speaking: false) { self.lost = nil }
         if let current, !isCurrent(current.prompt, speaking: true) {
             self.current = nil
             speech.stop()
@@ -216,9 +252,11 @@ final class VoiceGuide {
     private func setHold(_ hold: Hold, _ on: Bool) {
         if on {
             holds.insert(hold)
+            if let cut = pending ?? current?.prompt, cut.priority == .turn { lost = cut }
             silence()
         } else {
             holds.remove(hold)
+            speakLost()
         }
     }
 

@@ -41,6 +41,9 @@ final class RideHistoryStore {
     /// Set before an opt-out is written and cleared once it is stored, so an opt-out
     /// whose file write failed still holds after a restart.
     private static let optOutPendingKey = "historyOptOutPending"
+    /// The ending of a ride whose final write failed: "<ride id>|<outcome>|<seconds since 1970>".
+    /// Without it the draft left on disk would come back as an interrupted ride.
+    private static let finishPendingKey = "historyFinishPending"
 
     init(directory: URL, now: Date, defaults: UserDefaults = .standard, io: RecordIO = .real) {
         self.defaults = defaults
@@ -53,7 +56,14 @@ final class RideHistoryStore {
         }
         // A draft left by a stopped app becomes an interrupted ride at its last observation.
         var changed = false
-        if let draft = contents.draft {
+        if var draft = contents.draft {
+            let ending = (defaults.string(forKey: Self.finishPendingKey) ?? "").split(separator: "|").map(String.init)
+            if ending.count == 3, ending[0] == draft.id.description,
+               let outcome = RideSummary.Outcome(rawValue: ending[1]), let ended = Double(ending[2]) {
+                // Totals are the last saved ones (at most one draft interval old).
+                draft.outcome = outcome
+                draft.lastObservedAt = Date(timeIntervalSince1970: ended)
+            }
             upsert(draft)
             contents.draft = nil
             changed = true
@@ -186,7 +196,9 @@ final class RideHistoryStore {
         upsert(summary(recording, outcome: outcome, now: now))
         contents.draft = nil
         self.recording = nil
-        save()
+        if !save() {
+            defaults.set("\(recording.id)|\(outcome.rawValue)|\(now.timeIntervalSince1970)", forKey: Self.finishPendingKey)
+        }
     }
 
     /// False (and nothing changed) when the deletion couldn't be stored.
@@ -272,6 +284,7 @@ final class RideHistoryStore {
         guard !isBlocked else { return false }
         do {
             try file.save(contents)
+            defaults.removeObject(forKey: Self.finishPendingKey)
             problem = file.backupExclusionFailed ? "Ride history may be included in phone backups." : nil
             return true
         } catch {
