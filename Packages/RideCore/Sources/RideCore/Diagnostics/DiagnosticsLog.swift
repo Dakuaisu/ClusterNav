@@ -115,7 +115,7 @@ public struct DiagnosticsLog: Sendable, Equatable {
     /// Plain-text export: versions, per-category counts and the event timeline.
     public func export(appVersion: String, sdkVersion: String?, osVersion: String) -> String {
         var lines = [
-            "N250 Ride diagnostics",
+            "Pulsar Vector diagnostics",
             "app \(appVersion)",
             "os \(osVersion)",
             "navigation sdk \(sdkVersion ?? "not initialised")",

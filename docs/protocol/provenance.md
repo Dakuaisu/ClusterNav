@@ -1,6 +1,6 @@
 # Protocol provenance
 
-N250Ride's cluster encoders are a Swift port of Ride Relay (MIT, © 2026 Mano K):
+Pulsar Vector's cluster encoders are a Swift port of Ride Relay (MIT, © 2026 Mano K):
 
 - Repository: https://github.com/manov-ik/ride-relay
 - Pinned commit: `530632e4ae116645a16710a15f73e492159a7699` (v1.7, 2026-10-26)

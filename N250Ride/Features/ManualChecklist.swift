@@ -80,7 +80,7 @@ final class ManualChecklist {
 
     func report(_ sections: [Section], appVersion: String, statusProfile: GeneralStatusProfile?,
                 consoleLog: String) -> String {
-        var lines = ["N250 Ride - manual checklist",
+        var lines = ["Pulsar Vector - manual checklist",
                      "App \(appVersion), status packet \(statusProfile?.rawValue ?? "off"), "
                          + "\(tested(in: sections))/\(sections.flatMap(\.checks).count) tried", ""]
         for section in sections {
@@ -192,13 +192,13 @@ final class ManualChecklist {
             GeneralStatusEncoder.encode(profile, GeneralStatusFields(heartbeat: heartbeat, callState: state, callerName: name))
         }
         return Section(title: "Calls (manual items 25, 28)", footer: "Sent as status packets; the app's own status packets pause until you send Call ended or leave this screen.", checks: [
-            Check(id: "call.incomingPacket", title: "Incoming call (sent by N250 Ride)",
+            Check(id: "call.incomingPacket", title: "Incoming call (sent by Pulsar Vector)",
                   expected: "Call icon blinks; caller name TEST in the bottom display.",
                   steps: [send("Incoming call, TEST", call(.incoming, "TEST", heartbeat: 1), to: status), ended]),
             Check(id: "call.numberPacket", title: "Incoming call with a number",
                   expected: "The manual says name or mobile number is shown.",
                   steps: [send("Incoming call, 9876543210", call(.incoming, "9876543210", heartbeat: 2), to: status), ended]),
-            Check(id: "call.activePacket", title: "Call answered (sent by N250 Ride)",
+            Check(id: "call.activePacket", title: "Call answered (sent by Pulsar Vector)",
                   expected: "Call icon steady once the call is received.",
                   steps: [send("Call in progress, TEST", call(.active, "TEST", heartbeat: 3), to: status), ended]),
             Check(id: "call.outgoingPacket", title: "Outgoing call (not in the manual)",
@@ -206,7 +206,7 @@ final class ManualChecklist {
                   steps: [send("Outgoing call, TEST", call(.outgoing, "TEST", heartbeat: 4), to: status), ended]),
             Check(id: "call.real", title: "Real incoming call",
                   expected: "Call icon blinks, caller shows, and both stay until you answer or it stops ringing.",
-                  howTo: "Keep N250 Ride open and connected. Ask someone to call you and let it ring for 15 s."),
+                  howTo: "Keep Pulsar Vector open and connected. Ask someone to call you and let it ring for 15 s."),
             Check(id: "call.accept", title: "Accept with Mode",
                   expected: "Press Mode under 1 s while ringing: the call is answered and the icon goes steady.",
                   howTo: "During a real call, press Mode briefly."),
@@ -232,12 +232,12 @@ final class ManualChecklist {
 
     private static func alerts() -> Section {
         Section(title: "Alerts and Bluetooth (manual items 16-18)", footer: "Earlier test: the bike acknowledged the sent alerts but showed nothing. The real-life checks tell us if the dashboard gets them from iOS instead.", checks: [
-            Check(id: "alert.missedPacket", title: "Missed call (sent by N250 Ride)",
+            Check(id: "alert.missedPacket", title: "Missed call (sent by Pulsar Vector)",
                   expected: "Missed call icon.",
                   steps: [send("Missed call from TEST", PhonePackets.missedCall(name: "TEST", number: "9999999999",
                                                                              epochSeconds: UInt32(Date().timeIntervalSince1970)),
                                to: PhonePackets.missedCallCharacteristic)]),
-            Check(id: "alert.messagePacket", title: "Message (sent by N250 Ride)",
+            Check(id: "alert.messagePacket", title: "Message (sent by Pulsar Vector)",
                   expected: "Message icon blinks 6 s, then stays on.",
                   steps: [send("SMS from TEST", PhonePackets.alert(.sms, sender: "TEST", epochSeconds: UInt32(Date().timeIntervalSince1970)),
                                to: PhonePackets.alertCharacteristic),
@@ -257,8 +257,8 @@ final class ManualChecklist {
                   expected: "Message icon gone until a new message arrives.",
                   howTo: "After a message icon is showing, switch the ignition off and on."),
             Check(id: "bt.icon", title: "Bluetooth icon",
-                  expected: "Blinks for 10 s after ignition on; steady while N250 Ride is connected.",
-                  howTo: "Switch the ignition on with N250 Ride open, and watch the Bluetooth icon."),
+                  expected: "Blinks for 10 s after ignition on; steady while Pulsar Vector is connected.",
+                  howTo: "Switch the ignition on with Pulsar Vector open, and watch the Bluetooth icon."),
         ])
     }
 

@@ -1,4 +1,4 @@
-# N250Ride: Google Navigation feasibility
+# Pulsar Vector: Google Navigation feasibility
 
 **Read date: 2026-11-11. GATE-1 OPEN/blocked pending reply.** This is documentary research, not Google approval or a device/routing test. Google live activation remains blocked by GATE-1 and GATE-2. Source IDs and full URLs are in the [evidence register](../.omo/evidence/n250-ios-navigation/task-02-feasibility.md).
 
@@ -47,7 +47,7 @@ G1 establishes remaining time/distance feed data; a particular clock-time ETA fi
 
 Hello Google Maps Platform team,
 
-I am developing N250Ride, a free native iPhone app, initially for my own single-user personal use as its developer. I would install it through Xcode Personal Team signing. I am not claiming commercial status. Public distribution is only a possible future direction.
+I am developing Pulsar Vector, a free native iPhone app, initially for my own single-user personal use as its developer. I would install it through Xcode Personal Team signing. I am not claiming commercial status. Public distribution is only a possible future direction.
 
 The app would use the Navigation SDK for iOS for traffic-aware two-wheeler guidance in India. It would display a Google map on the phone and send turn arrows, distance and ETA over Bluetooth LE to the existing segmented instrument cluster on my own 2026 Bajaj Pulsar N250 motorcycle. The cluster would show navigation-only guidance, not a map. Destinations would come from map long-press, locally saved favourites, or pasted latitude/longitude and full plus codes decoded on-device. I do not plan to use Places, Geocoding or Routes API.
 

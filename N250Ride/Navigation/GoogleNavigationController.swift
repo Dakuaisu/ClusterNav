@@ -32,7 +32,7 @@ final class GoogleNavigationController: NSObject, LiveNavigationProvider {
     private var lastFields: GoogleNavInfoFields?
     private(set) var termsAccepted = GMSNavigationServices.areTermsAndConditionsAccepted()
 
-    static let companyName = "N250 Ride"
+    static let companyName = "Pulsar Vector"
 
     static func provideKeyOnce(_ key: String) -> Bool {
         GMSServices.provideAPIKey(key)

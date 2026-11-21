@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>N250 Ride</string>
+	<string>Pulsar Vector</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -40,11 +40,11 @@
 	<key>N250StatusProfile</key>
 	<string>$(N250_STATUS_PROFILE)</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>N250 Ride connects to your motorcycle's instrument cluster to show turn arrows, distance and arrival time.</string>
+	<string>Pulsar Vector connects to your motorcycle's instrument cluster to show turn arrows, distance and arrival time.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>N250 Ride keeps guiding and updating your bike's dashboard while the phone is locked during navigation.</string>
+	<string>Pulsar Vector keeps guiding and updating your bike's dashboard while the phone is locked during navigation.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>N250 Ride uses your location to calculate the route and give turn-by-turn guidance.</string>
+	<string>Pulsar Vector uses your location to calculate the route and give turn-by-turn guidance.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIBackgroundModes</key>
