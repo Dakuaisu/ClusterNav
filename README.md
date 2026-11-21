@@ -1,194 +1,63 @@
-# N250 Ride
+# Pulsar Vector
 
-N250 Ride is an iPhone navigation app for the 2026 Bajaj Pulsar N250's existing
-instrument cluster. It computes turn-by-turn guidance on the phone and sends
-turn arrows, distance, and ETA to the dashboard over Bluetooth Low Energy (BLE).
+Pulsar Vector is an unofficial SwiftUI iPhone app that brings turn-by-turn guidance to the 2026 Bajaj Pulsar N250’s existing instrument cluster. MapKit plans the route, the local Swift guidance engine tracks progress, and CoreBluetooth sends dashboard updates over Bluetooth Low Energy (BLE).
 
-**Development status:** this is a development build, not a road-validated release.
-Parked testing has confirmed that test arrows display on the N250. That does not
-establish end-to-end navigation reliability. See the
-[support matrix](docs/support-matrix.md) for feature-by-feature evidence and limits.
+**Development status:** this is a development build, not a road-validated release. Parked bench checks and the owner's ride feedback have shaped roundabout exits, spoken directions, and dashboard updates, but they do not establish end-to-end navigation reliability. Don't rely on this build as your sole navigation aid. See the [support matrix](docs/support-matrix.md) for feature-by-feature evidence and limits.
 
-## Capabilities
+## Try it in the simulator
 
-The following features are implemented; implementation does not mean they have
-been verified on the motorcycle:
-
-- Apple Maps place search, destination confirmation, and alternative routes,
-  with options to avoid tolls and highways.
-- On-phone guidance with route progress, off-route detection, rerouting, arrival
-  handling, and BLE dashboard updates.
-- Spoken directions, saved Home and Work destinations, and recent destinations.
-- Destination import through pasted map links, the share extension, and the
-  `n250ride://` URL scheme.
-- A Live Activity for the Lock Screen and Dynamic Island on supported devices.
-- Synthetic-route simulation, diagnostics, and a parked-only Bluetooth console
-  for inspecting and testing cluster communication.
-- Ride health that explains GPS, route, bike and voice problems and never shows a
-  direction from stale position data, on the phone and the Lock Screen.
-- Manual recalculate with cancel and retry; route changes take effect only once
-  the new route is ready.
-- One optional stop on the way, a queue for destinations shared during a ride,
-  opt-in recovery of interrupted rides and opt-in, privacy-limited ride history.
-- Concise or detailed voice with repeat and test, paused during calls or when a
-  headset disconnects; a parked, step-by-step bike compatibility check; an energy
-  saving mode.
-
-## Routing and current limits
-
-The active provider is **Apple Maps (MapKit), using car-profile routes**. MapKit
-has no motorcycle routing profile, so these routes are not motorcycle-specific.
-Turn-by-turn guidance is computed by the local `RideCore` engine. The default
-Apple build needs no Google API key or Google billing setup.
-
-- Locked-screen and background operation on a physical device remain unverified.
-  Declared background modes and simulator behavior are not proof of reliability
-  on the road.
-- Road testing and six-hour endurance testing have not started. Perform initial
-  bike checks while parked; don't rely on this build as your sole navigation aid.
-- Stop-frame clearing and cluster timeout after disconnection remain unverified
-  on the N250. Status packet profiles require separate parked validation.
-- Real helmet or earphone voice output and sharing from another app's Share sheet
-  still need device testing.
-- ETA is based on Apple's route time scaled by remaining distance. Traffic is
-  not refreshed until a reroute.
-- Maneuver classification uses English instructions, with a more conservative
-  geometry fallback for other languages.
-- iOS does not let this app answer phone calls or access caller names. Caller-name
-  display is not available through N250 Ride.
-
-**Google navigation is optional and disabled.** Its adapter is retained behind
-`canImport(GoogleNavigation)`, but the SDK packages and dependencies are excluded
-from the current project. Re-enabling it requires eligibility approval (GATE-1),
-an accepted billing boundary (GATE-2), configuration changes, and fresh testing.
-Neither gate is settled. See [feasibility](docs/feasibility.md) and the
-[cost model](docs/cost-model.md); local request limits are not a hard billing cap.
-
-## Requirements
-
-- macOS with Xcode 26 or later for iOS builds and simulator tests, following the
-  documented setup baseline.
-- Swift 6. The project enables complete strict concurrency checking.
-- XcodeGen (`brew install xcodegen`; version 2.46 was used in the setup guide).
-- An installed iOS simulator runtime for app tests.
-- An iPhone running iOS 17 or later and a signing team for device installation.
-  A physical motorcycle is needed to validate dashboard behavior.
-
-The standalone `RideCore` package targets macOS 14 or later and iOS 17 or later.
-Its tests can run with a compatible Swift 6 Command Line Tools installation,
-without full Xcode.
-
-## Setup
-
-Run commands from the repository root. For first-time Xcode selection, license
-acceptance, and simulator setup, follow [the setup guide](docs/setup.md).
-
-### Generate and open the project
+Use macOS with Xcode 26 or later, an installed iOS simulator runtime, and XcodeGen. From the repository root:
 
 ```sh
 brew install xcodegen
-scripts/test.sh core
 xcodegen generate
-open N250Ride.xcodeproj
+open PulsarVector.xcodeproj
 ```
 
-Select the `N250Ride` scheme and an iPhone simulator in Xcode to build and run.
-Diagnostics > Simulation mode replays a synthetic route without route requests.
+1. Select the **PulsarVector** scheme and an iPhone simulator, then run the app.
+2. Open **Ride settings → Advanced** and enable **Simulation mode** before starting a ride. Use **Show Diagnostics tab** in the same section to reveal the bench tools.
+3. Return to the destination picker, expand **Coordinates or plus code**, and enter `12.9716, 77.5946`. Use the entered destination, confirm it, then tap **Start**.
+4. Watch the turn card and distance update on the synthetic route. Tap **End ride** to return to the picker.
 
-After installing Xcode and completing its first-launch setup, the optional
-bootstrap script installs the iOS simulator platform if missing, generates the
-project, resolves dependencies, and runs core and app tests:
+Simulation needs no bike, API key, or live route request. It demonstrates the app flow, not physical dashboard behavior. See the [setup guide](docs/setup.md) for Xcode setup and iPhone signing.
 
-```sh
-scripts/bootstrap-xcode.sh
-```
+## Before and after a ride
 
-### Configure signing for an iPhone
+- **Pre-Ride Ready:** While parked, check **Route**, **Position**, **Bike**, and **Helmet audio** in the route preview. **Start** checks your current position in live mode. Bike connection and spoken directions do not block starting.
+- **Route alternatives:** In a live preview, tap **See routes on the map**. Tap a route line or its time-and-distance label to select it, then return to **Ride** and tap **Start**.
+- **Siri Home or Work preview:** Save **Home** or **Work** under **Ride settings → Places**. Try “Preview my route home in Pulsar Vector” or “Preview my route to work in Pulsar Vector.” Siri opens the app for a preview; tap **Start** separately. Siri invocation has not been validated on a physical iPhone.
+- **History and GPS Recaps:** Open **History → GPS Recaps** and turn on **Record GPS tracks** before starting a new ride. It is off by default, separate from **Keep ride history**, and never backfills earlier rides. Recaps stay on this phone and show only GPS fixes the app accepted during recording; gaps are left unconnected. Open a recap to **Export GPX** or **Delete recap**. Export includes precise recorded coordinates, timestamps, and GPS accuracy; deleting the recap does not remove exported copies. See the [support matrix](docs/support-matrix.md) for recording caps.
 
-Copy the example configuration:
+## How it works
 
-```sh
-cp Config/Local.example.xcconfig Config/Local.xcconfig
-```
+The rebrand keeps existing `n250ride://` links working. The repository URL, source paths, and internal identifiers are unchanged, including the `N250Ride` target and `N250Ride.app` build product.
 
-In `Config/Local.xcconfig`, uncomment and set `N250_DEVELOPMENT_TEAM` to your Xcode
-team ID and `N250_BUNDLE_ID` to a unique bundle identifier. This local file is
-ignored by version control and included by `Config/App.xcconfig`. Never commit
-real signing values or API keys.
-
-Regenerate the project, open it, select your iPhone, and run:
-
-```sh
-xcodegen generate
-open N250Ride.xcodeproj
-```
-
-Enable Developer Mode and trust the developer certificate on the phone as
-described in the setup guide. Free Personal Team installs expire after seven
-days and must be renewed. Leave Google navigation and status-profile overrides
-disabled unless their respective prerequisites have been verified.
-
-For initial bike pairing, close the official Bajaj app, disconnect other phones,
-and use Bike > Scan while parked.
-
-## Tests
-
-Run the standalone core suite:
-
-```sh
-scripts/test.sh core
-```
-
-Run app unit tests and UI tests on the first available iPhone simulator:
-
-```sh
-scripts/test.sh app
-```
-
-To choose a simulator, list the available devices and substitute its identifier:
-
-```sh
-xcrun simctl list devices available
-SIMULATOR_UDID="YOUR_SIMULATOR_UDID" scripts/test.sh app
-```
-
-Run both suites with `scripts/test.sh all`. The app test command regenerates the
-Xcode project and writes a timestamped `.xcresult` bundle under
-`.omo/evidence/n250-ios-navigation/` by default. Normal runs skip the opt-in live
-Apple routing test; instructions for that network-backed test are in the
-[setup guide](docs/setup.md#live-apple-test-in-the-simulator-optional-uses-the-network).
-
-Core tests cover protocol encoding, session safety, BLE write scheduling,
-destination parsing, request limits, and guidance logic. App and UI tests cover
-provider integration and simulated user flows. These checks do not establish
-physical-bike compatibility or road endurance.
-
-## Architecture
-
-The iOS app coordinates routing, location, and user interaction. `RideCore`
-handles guidance and protocol logic, while the CoreBluetooth adapter sends
-encoded updates to the cluster. The share extension accepts destinations, and
-the widget extension presents the ride's Live Activity.
-
-| Path | Responsibility |
+| Layer | Design |
 | --- | --- |
-| `Packages/RideCore/` | Pure Swift guidance engine, packet encoders, session state and safety rules, BLE write pump, request gate, destination parsing, and diagnostics. |
-| `N250Ride/` | SwiftUI app, composition root, platform adapters including CoreBluetooth and MapKit, and the disabled optional Google adapter. |
-| `N250RideShare/` | Share extension for incoming destinations. |
-| `N250RideWidgets/` | Live Activity presentation. |
-| `Shared/` | Types and handoff code shared with extensions. |
-| `N250RideTests/`, `N250RideUITests/` | App unit tests and UI tests. |
-| `project.yml` | XcodeGen specification for the app, extensions, and test targets. |
-| `Config/` | Tracked build defaults and an example for ignored local overrides. |
-| `scripts/` | Test entry points, Xcode bootstrap, and protocol golden-vector tooling. |
-| `docs/` | Setup, validation status, troubleshooting, routing constraints, and protocol provenance. |
+| [SwiftUI app and platform adapters](N250Ride/) | MapKit supplies route candidates and Core Location supplies position samples. The adapters turn those results into plain Swift values that can also come from test doubles. A new route is prepared before it replaces the active one. |
+| [RideCore](Packages/RideCore/) | A standalone Swift package snaps position to route geometry, tracks progress, detects off-route movement, and produces typed navigation snapshots. An injected clock supports repeatable fixture replay and stale-state tests. |
+| [Cluster protocol](docs/protocol/) | RideCore encodes guidance and status frames and schedules writes. The CoreBluetooth adapter handles the physical link; the parked console and manual checklist let a tester compare write outcomes with what the cluster actually shows. |
+| [Share extension](N250RideShare/) and [Live Activity](N250RideWidgets/) | The share extension imports destinations. The widget extension presents current guidance on supported Lock Screen and Dynamic Island surfaces. |
 
-## Documentation
+Live routing uses **MapKit’s car profile**, not a motorcycle-specific profile. The optional Google adapter is excluded from the default build; see [feasibility](docs/feasibility.md) and the [cost model](docs/cost-model.md).
 
-- [Setup and device installation](docs/setup.md)
-- [Support matrix and verification evidence](docs/support-matrix.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Google eligibility and feasibility](docs/feasibility.md)
-- [Google costs and billing limits](docs/cost-model.md)
-- [Protocol documentation and provenance](docs/protocol/)
-- [Third-party notices](THIRD_PARTY_NOTICES.md)
+## Current limits
+
+- Locked-screen and background operation on a physical device remain unverified. Declared background modes and simulator behavior are not proof of reliability on the road.
+- Road reliability is not validated and six-hour endurance has not been verified. Do bike checks while parked.
+- Cluster timeout after disconnection remains unverified on the N250. Status packet profiles require separate parked validation.
+- Real helmet or earphone voice output and sharing from another app's Share sheet still need device testing.
+- ETA is Apple's route time scaled by remaining distance. Traffic is not refreshed until a reroute.
+- Maneuver classification uses English instructions, with a more conservative geometry fallback for other languages.
+- iOS does not let this app answer phone calls or read caller names.
+
+## Tests and documentation
+
+```sh
+scripts/test.sh core  # Standalone RideCore tests
+scripts/test.sh app   # App and UI tests on an iPhone simulator
+```
+
+The core suite covers packet encoding, write scheduling, route guidance, and session behavior. The [simulator UI tests](N250RideUITests/SimulationUITests.swift) cover destination entry, confirmation, start, and stop. Neither suite validates road safety or physical-cluster compatibility.
+
+[Setup and device installation](docs/setup.md) · [Support matrix](docs/support-matrix.md) · [Troubleshooting](docs/troubleshooting.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
