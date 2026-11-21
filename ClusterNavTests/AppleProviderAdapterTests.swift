@@ -250,6 +250,17 @@ struct AppleProviderAdapterTests {
         #expect(map.overlays.isEmpty && map.annotations.contains { $0 === other })
     }
 
+    @Test func rehearsalReadsThePreparedRouteWithoutAnotherRequest() throws {
+        let route = try prepare([candidate(id: 5, line: [origin, FakeDirections.point(origin, x: 0, y: 500)])])
+        let steps = provider.rehearsalSteps(route.handle, option: 5)
+        #expect(!steps.isEmpty && steps.last?.maneuver == .arrival)
+        #expect(steps.allSatisfy { RouteRehearsal.cue(for: $0, style: .detailed) != nil })
+        #expect(provider.rehearsalSteps(route.handle, option: 99).isEmpty)
+        #expect(directions.queries.count == 1, "rehearsing asks Apple for nothing")
+        provider.discardPrepared(route.handle)
+        #expect(provider.rehearsalSteps(route.handle, option: 5).isEmpty)
+    }
+
     @Test func discardRemovesOnlyItsPreviewAndKeepsMapGestures() throws {
         let line = [origin, FakeDirections.point(origin, x: 0, y: 500)]
         let route = try prepare([candidate(id: 8, line: line)])

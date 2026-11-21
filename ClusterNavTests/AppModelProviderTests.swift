@@ -33,6 +33,11 @@ final class SpyProvider: LiveNavigationProvider {
     var committed: [PreparedRouteHandle] = []
     var selected: [RouteOption.ID] = []
     var preparedHandle: PreparedRouteHandle?
+    var line: [Coordinate] = []
+
+    func routeLine(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [Coordinate] {
+        handle == preparedHandle ? line : []
+    }
     var started = 0
     var stops = 0
     var startCheck = StartCheck.ready

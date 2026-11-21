@@ -174,6 +174,15 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
         return true
     }
 
+    func rehearsalSteps(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [GuidanceStep] {
+        guard let candidate = prepared[handle]?.candidates.first(where: { $0.option.id == option }) else { return [] }
+        return RouteRehearsal.steps(for: candidate.route)
+    }
+
+    func routeLine(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [Coordinate] {
+        prepared[handle]?.candidates.first { $0.option.id == option }?.line ?? []
+    }
+
     func checkStart(_ handle: PreparedRouteHandle, completion: @escaping @MainActor (StartCheck) -> Void) {
         guard let p = prepared[handle] else {
             completion(.noCurrentFix)

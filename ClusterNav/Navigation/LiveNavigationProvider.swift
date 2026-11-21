@@ -90,6 +90,11 @@ protocol LiveNavigationProvider: AnyObject {
                       completion: @escaping @MainActor (Result<PreparedRoute, RouteRequestFailure>) -> Void)
     /// Shows a prepared candidate on the map before guidance. No network request.
     func previewPrepared(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> Bool
+    /// The maneuvers of a prepared candidate in order, for a parked rehearsal. Empty
+    /// when the provider can't list them. No network request.
+    func rehearsalSteps(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [GuidanceStep]
+    /// The line of a prepared candidate, from where the route starts. Empty when unknown.
+    func routeLine(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [Coordinate]
     /// Waits briefly for a current position and compares it with the route's start.
     func checkStart(_ handle: PreparedRouteHandle, completion: @escaping @MainActor (StartCheck) -> Void)
     /// Makes a prepared route the active one. Synchronous and silent.
@@ -112,4 +117,9 @@ struct ProviderMapHost: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIView { view }
     func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+extension LiveNavigationProvider {
+    func rehearsalSteps(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [GuidanceStep] { [] }
+    func routeLine(_ handle: PreparedRouteHandle, option: RouteOption.ID) -> [Coordinate] { [] }
 }
