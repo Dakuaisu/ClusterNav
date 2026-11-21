@@ -386,7 +386,7 @@ struct VoiceAdapterTests {
     }
 
     @Test func overlappingHoldsResumeNothingUntilAllClear() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         audio.onInterruption?(true)
         voice.callChanged(true)
         audio.headsetRemoved()
@@ -402,7 +402,7 @@ struct VoiceAdapterTests {
     }
 
     @Test func staleOrObsoletePromptsAreNotSpoken() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         voice.handle(snapshot(250), eligible: false)
         #expect(speech.texts.isEmpty, "no turn on stale guidance")
         voice.handle(snapshot(240), eligible: true)
@@ -417,7 +417,7 @@ struct VoiceAdapterTests {
     }
 
     @Test func voiceOffAndFailedActivationLeaveNothingActive() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         voice.handle(snapshot(250), eligible: true)
         voice.setEnabled(false)
         #expect(audio.log.last == "deactivate" && speech.stops == 1)
@@ -425,15 +425,6 @@ struct VoiceAdapterTests {
         audio.activationSucceeds = false
         voice.handle(snapshot(50), eligible: true)
         #expect(voice.holdReason == "Audio unavailable - voice can't play.")
-    }
-
-    @Test func testAudioIsRateLimited() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
-        voice.test()
-        voice.test()
-        clock.advance(by: .seconds(3))
-        voice.test()
-        #expect(speech.texts.count == 2)
     }
 }
 
@@ -503,7 +494,7 @@ struct CallFlowTests {
     @Test func callAudioInterruptionDoesNotSilenceDirections() {
         let clock = ManualClock()
         let speech = FakeSpeech(), audio = FakeAudio()
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         audio.onInterruption?(true)
         voice.callChanged(true)
         audio.onInterruption?(true)

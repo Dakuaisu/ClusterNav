@@ -254,7 +254,7 @@ final class AppModel {
         voiceEnabled = defaults.object(forKey: Self.voiceKey) as? Bool ?? true
         let style = defaults.string(forKey: Self.voiceStyleKey).flatMap(VoiceStyle.init(rawValue:)) ?? .detailed
         voiceStyle = style
-        voice = VoiceGuide(speech: deps.speech, audio: deps.audio, clock: clock, style: style)
+        voice = VoiceGuide(speech: deps.speech, audio: deps.audio, style: style)
         routePreferences = defaults.data(forKey: Self.routePreferencesKey)
             .flatMap { try? JSONDecoder().decode(RoutePreferences.self, from: $0) } ?? RoutePreferences()
         energySaving = defaults.bool(forKey: Self.energyKey)

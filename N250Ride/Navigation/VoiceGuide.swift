@@ -38,10 +38,10 @@ protocol AudioSessionClient: AnyObject {
 /// and the audio interruption a call causes is not treated as a hold.
 ///
 /// A turn prompt starts only while it is still true: same route and maneuver, and
-/// guidance eligible (a current GPS position). Once started it is allowed to finish,
-/// even if the rider passes the turn or the fix it was planned from ages while newer
-/// fixes keep coming; it is cut only when it becomes wrong: GPS lost (eligibility
-/// gone), the route replaced, a hold, or the ride ending.
+/// guidance eligible (a current GPS position). Once started it is allowed to finish
+/// while the fix it was planned from ages and newer fixes keep coming. It is cut only
+/// when it becomes wrong or is overtaken: GPS lost (eligibility gone), the route
+/// replaced, a hold, the ride ending, or a prompt for the next maneuver being ready.
 @MainActor
 @Observable
 final class VoiceGuide {
@@ -58,23 +58,18 @@ final class VoiceGuide {
 
     @ObservationIgnored private let speech: SpeechClient
     @ObservationIgnored private let audio: AudioSessionClient
-    @ObservationIgnored private let clock: RideClock
     @ObservationIgnored private var planner: VoicePromptPlanner
     @ObservationIgnored private var enabled = true
     @ObservationIgnored private var current: (tag: Int, prompt: VoicePrompt)?
     @ObservationIgnored private var pending: VoicePrompt?
     @ObservationIgnored private var latest: NavigationSnapshot?
     @ObservationIgnored private var nextTag = 0
-    @ObservationIgnored private var lastTestAt: MonotonicInstant?
     @ObservationIgnored private var eligible = false
     @ObservationIgnored private var callActive = false
 
-    static let testInterval: Duration = .seconds(3)
-
-    init(speech: SpeechClient, audio: AudioSessionClient, clock: RideClock, style: VoiceStyle = .detailed) {
+    init(speech: SpeechClient, audio: AudioSessionClient, style: VoiceStyle = .detailed) {
         self.speech = speech
         self.audio = audio
-        self.clock = clock
         self.style = style
         planner = VoicePromptPlanner(style: style)
         outputName = audio.outputName
@@ -138,22 +133,6 @@ final class VoiceGuide {
         say(prompt)
     }
 
-    /// A short sample on the current output, at most once every three seconds.
-    func test() {
-        let now = clock.now
-        if let lastTestAt, now.duration(since: lastTestAt) < Self.testInterval { return }
-        lastTestAt = now
-        guard holds.subtracting([.speakerFallback]).isEmpty else { return }
-        // The sample replaces whatever is speaking, so no turn is left playing untracked behind it.
-        pending = nil
-        if current != nil {
-            current = nil
-            speech.stop()
-        }
-        say(VoicePrompt(text: "This is N250 Ride. Directions will sound like this.", priority: .status,
-                        session: SessionID(), generation: RouteGeneration(0)))
-    }
-
     /// A call never silences directions. The interruption it causes (in either order) is ignored.
     func callChanged(_ active: Bool) {
         callActive = active
@@ -169,7 +148,10 @@ final class VoiceGuide {
 
     private func enqueue(_ prompt: VoicePrompt) {
         guard let current else { return say(prompt) }
-        if prompt.priority > current.prompt.priority {
+        // A turn for another maneuver replaces one still being spoken: the rider has moved on.
+        let supersedes = prompt.priority == .turn && current.prompt.priority == .turn
+            && prompt.step != current.prompt.step
+        if prompt.priority > current.prompt.priority || supersedes {
             pending = nil
             speech.stop()
             self.current = nil
@@ -204,7 +186,8 @@ final class VoiceGuide {
 
     /// Whether a turn prompt may be (or keep being) spoken. Status prompts always may.
     /// Not yet started: eligible guidance on the same route and still the same maneuver.
-    /// Already speaking: eligible guidance on the same route; passing the turn is fine.
+    /// Already speaking: eligible guidance on the same route; the next maneuver's own
+    /// prompt replaces it (see `enqueue`), passing the turn alone does not.
     private func isCurrent(_ prompt: VoicePrompt, speaking: Bool) -> Bool {
         guard prompt.priority == .turn else { return true }
         guard eligible, let latest, latest.session == prompt.session,

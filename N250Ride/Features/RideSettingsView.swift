@@ -21,8 +21,6 @@ struct RideSettingsView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("voiceStylePicker")
                     LabeledContent("Plays through", value: model.voice.outputName)
-                    Button("Test audio") { model.voice.test() }
-                        .accessibilityIdentifier("testAudioButton")
                     if let reason = model.voice.holdReason {
                         Label(reason, systemImage: "speaker.slash").foregroundStyle(.orange)
                         if model.voice.holds.contains(.speakerFallback) {

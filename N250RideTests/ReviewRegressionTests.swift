@@ -11,7 +11,7 @@ struct ReviewRegressionTests {
     @Test func h1QueuedTurnDoesNotSpeakAfterMeasurementExpiry() {
         let clock = ManualClock()
         let speech = FakeSpeech(), audio = FakeAudio()
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         let session = SessionID()
         func turn(_ metres: Int) -> NavigationSnapshot {
             NavigationSnapshot(session: session, generation: RouteGeneration(0), observedAt: clock.now, state: .active,
@@ -24,14 +24,14 @@ struct ReviewRegressionTests {
         clock.advance(by: .seconds(5))
         voice.setEligible(false)
         speech.finish(1)
-        #expect(speech.texts.count == 1, "measurement expired while waiting: the pending turn is dropped")
+        #expect(speech.texts.count == 1, "eligibility lost while waiting: the pending turn is dropped")
         #expect(audio.log.last == "deactivate")
     }
 
     @Test func h1LosingEligibilityCutsCurrentTurnAndDropsPending() {
         let clock = ManualClock()
         let speech = FakeSpeech(), audio = FakeAudio()
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         let session = SessionID()
         let snap = { (m: Int, seq: Int) in
             NavigationSnapshot(session: session, generation: RouteGeneration(0), observedAt: clock.now, state: .active,
@@ -49,7 +49,7 @@ struct ReviewRegressionTests {
     @Test func h1NewStepWithoutPromptDropsTheOldStepsPendingTurn() {
         let clock = ManualClock()
         let speech = FakeSpeech(), audio = FakeAudio()
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         let session = SessionID()
         let snap = { (m: Int, seq: Int) in
             NavigationSnapshot(session: session, generation: RouteGeneration(0), observedAt: clock.now, state: .active,
@@ -76,6 +76,10 @@ struct ReviewRegressionTests {
     }
 
     // MARK: M1 Live Activity expiry
+
+    @Test func m1StaleActivityUsesTheCurrentAppName() {
+        #expect(RideActivityAttributes.ContentState.stale.detail == "Open Pulsar Vector")
+    }
 
     @Test func m1EqualContentStillRenewsTheStaleDate() async {
         let timers = ManualRideTimers(clock: ManualClock())
@@ -426,23 +430,6 @@ struct SecondReviewRegressionTests {
         NavigationSnapshot(session: session, generation: RouteGeneration(0), observedAt: clock.now, state: .active,
                            step: GuidanceStep(maneuver: .turnLeft, distanceMetres: metres, sequence: 1),
                            remainingMetres: 900, remainingSeconds: 90, measurementAt: clock.now)
-    }
-
-    // 1
-    @Test func testAudioReplacesASpeakingTurn() {
-        let clock = ManualClock()
-        let speech = FakeSpeech(), audio = FakeAudio()
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
-        let session = SessionID()
-        voice.handle(turn(250, session: session, clock: clock), eligible: true)
-        voice.handle(turn(50, session: session, clock: clock), eligible: true)
-        voice.test()
-        #expect(speech.stops == 1, "the speaking turn is stopped, not left playing behind the sample")
-        #expect(speech.texts.last?.hasPrefix("This is N250 Ride") == true)
-        clock.advance(by: .seconds(5))
-        voice.setEligible(false)
-        speech.finish()
-        #expect(speech.texts.count == 2, "the pending turn never plays after the sample")
     }
 
     // 2
@@ -807,7 +794,7 @@ struct VoiceCutoffTests {
     }
 
     @Test func aLongInstructionFinishesWhileFreshFixesKeepComing() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         voice.handle(snap(290), eligible: true)
         for t in 1...7 {
             clock.advance(by: .seconds(1))
@@ -816,17 +803,26 @@ struct VoiceCutoffTests {
         #expect(speech.stops == 0, "a 6-7 s instruction isn't cut at 5 s")
     }
 
-    @Test func passingTheTurnMidSentenceDoesNotCutIt() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+    @Test func passingTheTurnWithNothingNewToSayDoesNotCutIt() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
         voice.handle(snap(40), eligible: true)
         clock.advance(by: .seconds(2))
-        voice.handle(snap(900, sequence: 4), eligible: true)
+        voice.handle(snap(5_000, sequence: 4), eligible: true)
         #expect(speech.stops == 0)
         #expect(speech.texts.count == 1)
     }
 
+    @Test func theNextManeuversPromptReplacesAStaleOne() {
+        let voice = VoiceGuide(speech: speech, audio: audio)
+        voice.handle(snap(40), eligible: true)
+        clock.advance(by: .seconds(2))
+        voice.handle(snap(40, sequence: 4), eligible: true)
+        #expect(speech.stops == 1, "the instruction for the turn already passed is cut")
+        #expect(speech.texts.count == 2, "the next turn's prompt is spoken at once, not queued behind it")
+    }
+
     @Test func gpsLossAndRouteChangeStillCutIt() {
-        let voice = VoiceGuide(speech: speech, audio: audio, clock: clock)
+        let voice = VoiceGuide(speech: speech, audio: audio)
         voice.handle(snap(290), eligible: true)
         voice.setEligible(false)
         #expect(speech.stops == 1, "GPS lost: the instruction may be wrong now")
