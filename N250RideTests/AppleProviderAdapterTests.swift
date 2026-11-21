@@ -1,6 +1,8 @@
 import Foundation
+import MapKit
 import RideCore
 import Testing
+import UIKit
 @testable import N250Ride
 
 /// The real Apple provider, on virtual time, with scripted locations and directions.
@@ -122,5 +124,148 @@ struct AppleProviderAdapterTests {
         provider.checkStart(handle) { checks.append($0) }
         location.deliver(FakeDirections.point(origin, x: 0, y: 40), clock: timers.clock)
         #expect(checks.last == .ready)
+    }
+
+    private func candidate(id: Int, line: [Coordinate], seconds: Double = 180) -> PlannedCandidate {
+        var candidate = FakeDirections.route(from: origin)
+        candidate.line = line
+        candidate.option = RouteOption(id: id, name: "Route \(id)", distanceMetres: 1_500 + Double(id),
+                                       expectedSeconds: seconds, hasTolls: false, hasHighways: false)
+        return candidate
+    }
+
+    private func prepare(_ candidates: [PlannedCandidate]) throws -> PreparedRoute {
+        var prepared: PreparedRoute?
+        location.deliver(origin, clock: timers.clock)
+        provider.prepareRoute(request()) { prepared = try? $0.get() }
+        directions.answer(.success(candidates))
+        return try #require(prepared)
+    }
+
+    private func configuredMap() throws -> MKMapView {
+        let map = try #require(provider.mapHostView as? MKMapView)
+        map.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        map.setRegion(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: origin.latitude + 0.0025,
+                                                                       longitude: origin.longitude),
+                                         span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)),
+                      animated: false)
+        map.layoutIfNeeded()
+        return map
+    }
+
+    @Test func tappingRouteUsesOverlayIdentityAfterSelectionReordersDrawing() throws {
+        let shared = FakeDirections.point(origin, x: 0, y: 100)
+        let north = FakeDirections.point(origin, x: 0, y: 500)
+        let east = FakeDirections.point(origin, x: 250, y: 500)
+        let routeA = candidate(id: 7, line: [origin, shared, north])
+        let routeB = candidate(id: 42, line: [origin, shared, east])
+        let route = try prepare([routeA, routeB])
+        let map = try configuredMap()
+        var selections: [(PreparedRouteHandle, RouteOption.ID)] = []
+        provider.onPreviewRouteSelection = { [weak provider] handle, option in
+            selections.append((handle, option))
+            _ = provider?.previewPrepared(handle, option: option)
+        }
+
+        let bPoint = FakeDirections.point(origin, x: 125, y: 300)
+        provider.selectPreviewRoute(at: map.convert(CLLocationCoordinate2D(latitude: bPoint.latitude,
+                                                                            longitude: bPoint.longitude), toPointTo: map))
+        #expect(selections.last?.0 == route.handle && selections.last?.1 == 42)
+        #expect(map.overlays.last?.title == AppleNavigationProvider.selectedTitle)
+        let aPoint = FakeDirections.point(origin, x: 0, y: 350)
+        provider.selectPreviewRoute(at: map.convert(CLLocationCoordinate2D(latitude: aPoint.latitude,
+                                                                            longitude: aPoint.longitude), toPointTo: map))
+        #expect(selections.last?.1 == 7)
+        #expect(selections.count == 2 && directions.queries.count == 1)
+        provider.selectPreviewRoute(at: CGPoint(x: -500, y: -500))
+        #expect(selections.count == 2)
+    }
+
+    @Test func sharedSectionsHaveSeparateAccessiblePointedCallouts() throws {
+        let end = FakeDirections.point(origin, x: 0, y: 700)
+        let line = [origin, end]
+        let route = try prepare([candidate(id: 1, line: line), candidate(id: 2, line: line, seconds: 240)])
+        let map = try configuredMap()
+        let labels = map.annotations.compactMap { $0 as? RoutePreviewAnnotation }
+        #expect(labels.count == 2)
+        let labelPoints = labels.map { map.convert($0.coordinate, toPointTo: map) }
+        for (label, point) in zip(labels, labelPoints) {
+            #expect((RoutePreviewGeometry.distance(from: point, to: label.overlay, on: map) ?? 100) < 1)
+        }
+        let rects = zip(labels, labelPoints).map { label, point in
+            let size = RoutePreviewAnnotationView.size(for: label.option)
+            return CGRect(x: point.x - size.width / 2, y: point.y - size.height, width: size.width, height: size.height)
+        }
+        #expect(!rects[0].intersects(rects[1]), "identical lines still get separate selectable labels")
+
+        var selected: RouteOption.ID?
+        provider.onPreviewRouteSelection = { handle, option in
+            #expect(handle == route.handle)
+            selected = option
+        }
+        let sharedPoint = FakeDirections.point(origin, x: 0, y: 350)
+        provider.selectPreviewRoute(at: map.convert(CLLocationCoordinate2D(latitude: sharedPoint.latitude,
+                                                                            longitude: sharedPoint.longitude), toPointTo: map))
+        #expect(selected == 1, "a tap on a perfectly shared section keeps the selected route")
+        selected = nil
+        let alternative = try #require(labels.first { $0.option.id == 2 })
+        let view = try #require(provider.mapView(map, viewFor: alternative) as? RoutePreviewAnnotationView)
+        view.layoutIfNeeded()
+        let button = try #require(view.subviews.compactMap { $0 as? UIButton }.first)
+        #expect(button.currentTitle == "4 min · 1.5 km")
+        #expect(button.accessibilityLabel?.contains("Route 2") == true)
+        #expect(button.accessibilityTraits.contains(.button))
+        #expect(button.accessibilityValue == "Not selected")
+        #expect(view.layer.sublayers?.contains(where: { ($0 as? CAShapeLayer)?.path != nil }) == true)
+        #expect(view.centerOffset.y == -view.bounds.height / 2)
+        #expect(button.bounds.height >= 44)
+        button.sendActions(for: .touchUpInside)
+        #expect(selected == 2, "the callout is selectable even where the lines coincide")
+    }
+
+    @Test func previewCleanupDoesNotRemoveOtherMapContentOrAffectActiveGuidance() throws {
+        let line = [origin, FakeDirections.point(origin, x: 0, y: 500)]
+        let route = try prepare([candidate(id: 3, line: line), candidate(id: 4, line: line)])
+        let map = try configuredMap()
+        let other = MKPointAnnotation()
+        other.coordinate = CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)
+        map.addAnnotation(other)
+        let stale = try #require(map.annotations.compactMap { $0 as? RoutePreviewAnnotation }.first)
+        let staleView = try #require(provider.mapView(map, viewFor: stale) as? RoutePreviewAnnotationView)
+        let staleButton = try #require(staleView.subviews.compactMap { $0 as? UIButton }.first)
+        var selections = 0
+        provider.onPreviewRouteSelection = { _, _ in selections += 1 }
+
+        #expect(provider.commitPreparedRoute(route.handle, option: 4))
+        #expect(map.annotations.compactMap { $0 as? RoutePreviewAnnotation }.isEmpty)
+        #expect(map.annotations.contains { $0 === other })
+        staleButton.sendActions(for: .touchUpInside)
+        #expect(selections == 0)
+        provider.startGuidance()
+        #expect(map.overlays.count == 1)
+        #expect(map.overlays.first?.title == AppleNavigationProvider.selectedTitle)
+        provider.selectPreviewRoute(at: map.convert(other.coordinate, toPointTo: map))
+        #expect(selections == 0)
+        provider.stop()
+        #expect(map.overlays.isEmpty && map.annotations.contains { $0 === other })
+    }
+
+    @Test func discardRemovesOnlyItsPreviewAndKeepsMapGestures() throws {
+        let line = [origin, FakeDirections.point(origin, x: 0, y: 500)]
+        let route = try prepare([candidate(id: 8, line: line)])
+        let map = try configuredMap()
+        let observer = try #require(map.subviews.compactMap { $0 as? RoutePreviewLayoutObserver }.first)
+        #expect(!observer.isUserInteractionEnabled && !observer.isOpaque && observer.accessibilityElementsHidden)
+        let tap = try #require(map.gestureRecognizers?.compactMap { $0 as? UITapGestureRecognizer }
+            .first { ($0.delegate as AnyObject?) === provider })
+        let longPress = try #require(map.gestureRecognizers?.first { $0 is UILongPressGestureRecognizer })
+        #expect(!tap.cancelsTouchesInView)
+        #expect(provider.gestureRecognizer(tap, shouldRecognizeSimultaneouslyWith: longPress))
+        provider.recenter()
+        #expect(map.overlays.count == 1)
+        provider.discardPrepared(route.handle)
+        #expect(map.overlays.isEmpty)
+        #expect(map.annotations.compactMap { $0 as? RoutePreviewAnnotation }.isEmpty)
+        #expect(!provider.previewPrepared(route.handle, option: 8))
     }
 }

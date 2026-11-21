@@ -16,6 +16,8 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
     var onLongPress: ((Coordinate) -> Void)?
     var onRerouteNeeded: (() -> Void)?
     var onFix: ((AdmittedFix) -> Void)?
+    /// The owner decides whether this preview is still eligible for selection.
+    var onPreviewRouteSelection: ((PreparedRouteHandle, RouteOption.ID) -> Void)?
 
     let name = "Apple Maps"
     let routingLabel = "Apple Maps car route - Apple has no motorcycle routing"
@@ -69,6 +71,8 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
     private var waiters: [FixWaiter] = []
     private var owners: Set<LocationOwner> = []
     private var overlays: [MKPolyline] = []
+    private var routeAnnotations: [RoutePreviewAnnotation] = []
+    private var routeIdentities: [ObjectIdentifier: (PreparedRouteHandle, RouteOption.ID)] = [:]
     private var guiding = false
     private var followAnimations = true
     private(set) var locationCallbacks = 0
@@ -88,9 +92,21 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
         termsAccepted = defaults.bool(forKey: Self.termsKey)
         super.init()
         mapView.delegate = self
+        let layoutObserver = RoutePreviewLayoutObserver(frame: mapView.bounds)
+        layoutObserver.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        layoutObserver.backgroundColor = .clear
+        layoutObserver.isOpaque = false
+        layoutObserver.isUserInteractionEnabled = false
+        layoutObserver.accessibilityElementsHidden = true
+        layoutObserver.onSizeChange = { [weak self] in self?.layoutRouteAnnotations() }
+        mapView.addSubview(layoutObserver)
         mapView.showsUserLocation = false
         mapView.pointOfInterestFilter = .excludingAll
         mapView.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:))))
+        let routeTap = UITapGestureRecognizer(target: self, action: #selector(routeTapped(_:)))
+        routeTap.cancelsTouchesInView = false
+        routeTap.delegate = self
+        mapView.addGestureRecognizer(routeTap)
         self.location.onSamples = { [weak self] in self?.received($0) }
         self.location.onAuthorizationDenied = { [weak self] in self?.permissionDenied() }
     }
@@ -350,10 +366,13 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
     // MARK: Map
 
     /// Alternatives in grey under the selected route in blue; while guiding only the
-    /// active route is drawn. The overlay title carries the style to the renderer.
+    /// active route is drawn. Identity is associated with each actual overlay object.
     private func drawRoutes() {
         mapView.removeOverlays(overlays)
+        mapView.removeAnnotations(routeAnnotations)
         overlays = []
+        routeAnnotations = []
+        routeIdentities = [:]
         var shown: [(candidate: PlannedCandidate, selected: Bool)] = []
         if guiding, let active {
             shown = [(active.candidate, true)]
@@ -365,8 +384,46 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
             let overlay = MKPolyline(coordinates: coordinates, count: coordinates.count)
             overlay.title = entry.selected ? Self.selectedTitle : Self.alternativeTitle
             overlays.append(overlay)
+            if let previewing, !guiding, let first = coordinates.first {
+                routeIdentities[ObjectIdentifier(overlay)] = (previewing.handle, entry.candidate.option.id)
+                routeAnnotations.append(RoutePreviewAnnotation(coordinate: first, overlay: overlay,
+                                                               handle: previewing.handle,
+                                                               option: entry.candidate.option,
+                                                               selected: entry.selected))
+            }
         }
         mapView.addOverlays(overlays, level: .aboveRoads)
+        mapView.addAnnotations(routeAnnotations)
+        layoutRouteAnnotations()
+    }
+
+    private func layoutRouteAnnotations() {
+        RoutePreviewGeometry.place(routeAnnotations, on: mapView)
+    }
+
+    /// Shared sections are ambiguous: prefer the already selected line on a tie.
+    /// Every alternative remains independently selectable through its callout.
+    func selectPreviewRoute(at point: CGPoint) {
+        guard !guiding, previewing != nil else { return }
+        let candidates = overlays.compactMap { overlay -> (MKPolyline, CGFloat)? in
+            guard routeIdentities[ObjectIdentifier(overlay)] != nil,
+                  let distance = RoutePreviewGeometry.distance(from: point, to: overlay, on: mapView),
+                  distance <= RoutePreviewGeometry.tapTolerance else { return nil }
+            return (overlay, distance)
+        }
+        guard let nearest = candidates.min(by: { lhs, rhs in
+            if abs(lhs.1 - rhs.1) < 0.5 {
+                return lhs.0.title == Self.selectedTitle && rhs.0.title != Self.selectedTitle
+            }
+            return lhs.1 < rhs.1
+        }), let identity = routeIdentities[ObjectIdentifier(nearest.0)] else { return }
+        selectPreviewRoute(handle: identity.0, option: identity.1)
+    }
+
+    func selectPreviewRoute(handle: PreparedRouteHandle, option: RouteOption.ID) {
+        guard !guiding, previewing?.handle == handle,
+              prepared[handle]?.candidates.contains(where: { $0.option.id == option }) == true else { return }
+        onPreviewRouteSelection?(handle, option)
     }
 
     private func showWholeRoute() {
@@ -377,6 +434,11 @@ final class AppleNavigationProvider: NSObject, LiveNavigationProvider {
 
     nonisolated static let selectedTitle = "selected"
     nonisolated static let alternativeTitle = "alternative"
+
+    @objc private func routeTapped(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        selectPreviewRoute(at: gesture.location(in: mapView))
+    }
 
     @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
@@ -395,5 +457,34 @@ extension AppleNavigationProvider: MKMapViewDelegate {
         renderer.alpha = selected ? 1 : 0.7
         renderer.lineWidth = selected ? 7 : 5
         return renderer
+    }
+
+    nonisolated func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        guard let route = annotation as? RoutePreviewAnnotation else { return nil }
+        return MainActor.assumeIsolated {
+            let view = RoutePreviewAnnotationView(annotation: route)
+            view.onSelect = { [weak self] in self?.selectPreviewRoute(handle: route.handle, option: route.option.id) }
+            return view
+        }
+    }
+
+    nonisolated func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        MainActor.assumeIsolated { layoutRouteAnnotations() }
+    }
+}
+
+extension AppleNavigationProvider: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        true
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var view = touch.view
+        while let current = view {
+            if current is RoutePreviewAnnotationView { return false }
+            view = current.superview
+        }
+        return true
     }
 }
