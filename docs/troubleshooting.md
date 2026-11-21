@@ -4,7 +4,7 @@
 | --- | --- |
 | `scripts/test.sh app` says BLOCKED | Xcode missing or licence not accepted: `sudo xcode-select -s /Applications/Xcode.app && sudo xcodebuild -license accept && sudo xcodebuild -runFirstLaunch`. |
 | `swift test` fails with "Unknown error parsing property list" or "no such module 'Testing'" | Command Line Tools only. Use `scripts/test.sh core`, which adds the needed flags. |
-| App shows "Simulation" | Simulation mode is switched on in Diagnostics (or the build has no live provider). The default Apple Maps build needs no key: turn Simulation mode off between rides to use live routes. |
+| App shows "Simulation" | Simulation mode is switched on in Ride settings > Advanced (or the build has no live provider). The default Apple Maps build needs no key: turn Simulation mode off between rides to use live routes. |
 | "Live navigation is off: …" | The route gate is disabled by configuration; no request was sent. |
 | "Daily/Monthly limit reached" | Local limit hit (20/day, 600/month). Resets at local midnight / month start. |
 | "No two-wheeler route found" | Only in a Google build (disabled by default). Google returned no two-wheeler route; the app never falls back to car routing. |
