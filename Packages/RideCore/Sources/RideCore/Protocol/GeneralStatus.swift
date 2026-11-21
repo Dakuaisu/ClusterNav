@@ -2,7 +2,7 @@
 ///
 /// Two layouts exist upstream and the cluster firmware accepts one of them; which
 /// one the N250 takes must be observed on the bench, never inferred from the model
-/// name. N250Ride mirrors no calls, SMS or media, so every phone field is the
+/// name. ClusterNav mirrors no calls, SMS or media, so every phone field is the
 /// neutral "no call" value Ride Relay sends when idle.
 public enum GeneralStatusProfile: String, Sendable, Codable, CaseIterable {
     /// `utils.CallFrame.phoneStatusNew`: 55 bytes, no checksum.

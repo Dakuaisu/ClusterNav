@@ -3,7 +3,7 @@ import MapKit
 import RideCore
 import Testing
 import UIKit
-@testable import N250Ride
+@testable import ClusterNav
 
 /// The real Apple provider, on virtual time, with scripted locations and directions.
 @MainActor

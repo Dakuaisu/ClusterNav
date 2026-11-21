@@ -2,7 +2,7 @@ import Foundation
 import RideCore
 import Testing
 import UIKit
-@testable import N250Ride
+@testable import ClusterNav
 
 /// The production AppModel on virtual time with a spy provider and temporary storage.
 @MainActor

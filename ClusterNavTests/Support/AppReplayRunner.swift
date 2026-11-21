@@ -1,6 +1,6 @@
 import Foundation
 import RideCore
-@testable import N250Ride
+@testable import ClusterNav
 
 /// Replays a scripted ride through the production AppModel and the real
 /// AppleNavigationProvider, with fake location and directions on virtual time.

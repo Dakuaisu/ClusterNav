@@ -24,20 +24,20 @@ packages:
 #    url: https://github.com/googlemaps/ios-maps-sdk
 #    exactVersion: 11.3.0
 targets:
-  N250Ride:
+  ClusterNav:
     type: application
     platform: iOS
-    sources: [N250Ride, Shared]
+    sources: [ClusterNav, Shared]
     dependencies:
       - package: RideCore
-      - target: N250RideWidgets
-      - target: N250RideShare
+      - target: ClusterNavWidgets
+      - target: ClusterNavShare
 #      - package: GoogleNavigation
 #        product: GoogleNavigation
 #      - package: GoogleMaps
 #        product: GoogleMaps
     info:
-      path: N250Ride/Info.plist
+      path: ClusterNav/Info.plist
       properties:
         CFBundleDisplayName: ClusterNav
         UILaunchScreen: {}
@@ -59,12 +59,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(N250_BUNDLE_ID)
         DEVELOPMENT_TEAM: $(N250_DEVELOPMENT_TEAM)
         CODE_SIGN_STYLE: Automatic
-  N250RideWidgets:
+  ClusterNavWidgets:
     type: app-extension
     platform: iOS
-    sources: [N250RideWidgets, Shared/RideActivityAttributes.swift]
+    sources: [ClusterNavWidgets, Shared/RideActivityAttributes.swift]
     info:
-      path: N250RideWidgets/Info.plist
+      path: ClusterNavWidgets/Info.plist
       properties:
         CFBundleDisplayName: ClusterNav
         NSExtension:
@@ -74,14 +74,14 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(N250_BUNDLE_ID).widgets
         DEVELOPMENT_TEAM: $(N250_DEVELOPMENT_TEAM)
         CODE_SIGN_STYLE: Automatic
-  N250RideShare:
+  ClusterNavShare:
     type: app-extension
     platform: iOS
-    sources: [N250RideShare, Shared/ShareInbox.swift]
+    sources: [ClusterNavShare, Shared/ShareInbox.swift]
     dependencies:
       - package: RideCore
     info:
-      path: N250RideShare/Info.plist
+      path: ClusterNavShare/Info.plist
       properties:
         CFBundleDisplayName: ClusterNav
         NSExtension:
@@ -96,28 +96,28 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(N250_BUNDLE_ID).share
         DEVELOPMENT_TEAM: $(N250_DEVELOPMENT_TEAM)
         CODE_SIGN_STYLE: Automatic
-  N250RideTests:
+  ClusterNavTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [N250RideTests]
+    sources: [ClusterNavTests]
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - target: N250Ride
-  N250RideUITests:
+      - target: ClusterNav
+  ClusterNavUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [N250RideUITests]
+    sources: [ClusterNavUITests]
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - target: N250Ride
+      - target: ClusterNav
 schemes:
   ClusterNav:
     build:
       targets:
-        N250Ride: all
+        ClusterNav: all
     test:
-      targets: [N250RideTests, N250RideUITests]
+      targets: [ClusterNavTests, ClusterNavUITests]

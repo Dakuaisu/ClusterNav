@@ -2,7 +2,7 @@
 import GoogleNavigation
 import RideCore
 import Testing
-@testable import N250Ride
+@testable import ClusterNav
 
 /// SDK-shaped synthetic fixtures; no SDK initialisation, key or network.
 struct GoogleGuidanceMapperTests {

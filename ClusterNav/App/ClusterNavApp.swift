@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct N250RideApp: App {
+struct ClusterNavApp: App {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 

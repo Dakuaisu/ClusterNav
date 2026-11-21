@@ -1,7 +1,7 @@
 package com.bajajnav.relay;
 
 /**
- * Oracle-only stand-in for upstream PhoneBridge. N250Ride mirrors no calls, so
+ * Oracle-only stand-in for upstream PhoneBridge. ClusterNav mirrors no calls, so
  * every phone field is the neutral "no call" value; constants match upstream.
  */
 final class PhoneBridge {

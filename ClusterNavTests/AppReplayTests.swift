@@ -1,7 +1,7 @@
 import Foundation
 import RideCore
 import Testing
-@testable import N250Ride
+@testable import ClusterNav
 
 @MainActor
 struct AppReplayTests {

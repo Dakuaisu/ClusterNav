@@ -1,7 +1,7 @@
 import Foundation
 import RideCore
 import Testing
-@testable import N250Ride
+@testable import ClusterNav
 
 /// One regression per finding in docs/repository-review-and-roadmap.md.
 @MainActor

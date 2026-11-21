@@ -1,6 +1,6 @@
 import Foundation
 import RideCore
-@testable import N250Ride
+@testable import ClusterNav
 
 @MainActor
 final class FakeSpeech: SpeechClient {
@@ -89,7 +89,7 @@ final class FakeActivitySink: ActivitySink {
 
 enum TestStorage {
     static func directory() -> URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent("N250RideTests-\(UUID().uuidString)", isDirectory: true)
+        FileManager.default.temporaryDirectory.appendingPathComponent("ClusterNavTests-\(UUID().uuidString)", isDirectory: true)
     }
 }
 

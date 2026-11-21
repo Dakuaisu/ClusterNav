@@ -1,6 +1,6 @@
 import Foundation
 import RideCore
-@testable import N250Ride
+@testable import ClusterNav
 
 @MainActor
 final class FakeLocation: LocationClient {

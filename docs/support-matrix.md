@@ -43,7 +43,7 @@ Latest test run (2026-11-21): 170 core tests and 140 app unit tests passed. All 
 | Plus-code and coordinate parsing | Verified against 420 Open Location Code reference vectors | RideCore tests |
 | Diagnostics exclude keys, coordinates, road text | Verified with sentinel values | RideCore tests |
 | iOS app build | Verified: simulator and generic-device (arm64, unsigned) builds succeed, Xcode 27.2, Swift 6 strict concurrency, no warnings in app code | task-11-14-app-tests.txt |
-| Simulation UI flow (paste → confirm → start → stop, favourites, short-code rejection) | Covered by simulator UI tests; earlier screenshots small/large, light/dark, largest text size | [SimulationUITests](../N250RideUITests/SimulationUITests.swift), task-01-tests.xcresult, task-14-screens/ |
+| Simulation UI flow (paste → confirm → start → stop, favourites, short-code rejection) | Covered by simulator UI tests; earlier screenshots small/large, light/dark, largest text size | [SimulationUITests](../ClusterNavUITests/SimulationUITests.swift), task-01-tests.xcresult, task-14-screens/ |
 | Pre-Ride Ready | Route preview shows Route, Position, Bike, and Helmet audio. In live mode, Start checks current position; Bluetooth and spoken directions are informational, not start requirements. Not a road-readiness guarantee. | Ready panel simulator test passed |
 | Google SDK adapter | Excluded from the current build (owner chose Apple MapKit 2026-11-12); code kept behind `canImport`, compiled and fixture-tested against SDK 11.3.0 before exclusion | task-11-14-app-tests.txt |
 | Google eligibility (GATE-1) | **Open**: policy says commercial applications only | [Feasibility](feasibility.md) |

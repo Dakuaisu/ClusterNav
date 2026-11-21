@@ -2,7 +2,7 @@ import Foundation
 import MapKit
 import RideCore
 import Testing
-@testable import N250Ride
+@testable import ClusterNav
 
 @MainActor
 struct RideTrackTests {

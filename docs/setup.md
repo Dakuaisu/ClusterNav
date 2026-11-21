@@ -37,7 +37,7 @@ SIMULATOR_UDID=<udid> scripts/test.sh app             # app + UI tests on a simu
 3. On the phone: enable Settings > Privacy & Security > Developer Mode (restart), and after the first install
    Settings > General > VPN & Device Management > trust your developer certificate.
    Command-line alternative once the team is set: `xcodebuild build -project ClusterNav.xcodeproj -scheme ClusterNav -destination id=<UDID> -allowProvisioningUpdates`
-   then `xcrun devicectl device install app --device <UDID> <path to Debug-iphoneos/N250Ride.app>`.
+   then `xcrun devicectl device install app --device <UDID> <path to Debug-iphoneos/ClusterNav.app>`.
 4. Free Personal Team installs **expire after 7 days**; reconnect and Run again to renew.
 
 The app uses **Apple Maps** car routing (no key, no billing). On first use it shows Apple's required notice
@@ -76,6 +76,6 @@ U=<simulator udid>
 xcrun simctl privacy $U grant location-always <bundle id>
 xcrun simctl location $U start --speed=6 --interval=1 - < waypoints.txt   # or: location $U set 12.9757,77.6050
 TEST_RUNNER_N250_LIVE=1 xcodebuild test -project ClusterNav.xcodeproj -scheme ClusterNav \
-  -destination "platform=iOS Simulator,id=$U" -only-testing:N250RideUITests/LiveAppleRouteUITests
+  -destination "platform=iOS Simulator,id=$U" -only-testing:ClusterNavUITests/LiveAppleRouteUITests
 ```
 Normal test runs skip this test, so they never contact Apple.

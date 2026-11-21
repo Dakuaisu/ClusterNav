@@ -3,7 +3,7 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct N250RideWidgets: WidgetBundle {
+struct ClusterNavWidgets: WidgetBundle {
     var body: some Widget {
         RideLiveActivityWidget()
     }

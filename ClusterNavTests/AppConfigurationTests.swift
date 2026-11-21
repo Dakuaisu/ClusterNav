@@ -1,6 +1,6 @@
 import RideCore
 import Testing
-@testable import N250Ride
+@testable import ClusterNav
 
 struct AppConfigurationTests {
     func config(_ provider: NavigationProviderKind, key: String?, authorised: Bool) -> AppConfiguration {

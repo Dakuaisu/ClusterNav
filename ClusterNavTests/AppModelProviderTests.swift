@@ -3,7 +3,7 @@ import Foundation
 import RideCore
 import Testing
 import UIKit
-@testable import N250Ride
+@testable import ClusterNav
 
 /// Spy provider: counts requests and lets the test decide when they complete.
 @MainActor

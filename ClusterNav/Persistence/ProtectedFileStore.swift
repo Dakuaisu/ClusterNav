@@ -134,10 +134,10 @@ final class RecordFile<Payload: Codable> {
 }
 
 enum StorageLocation {
-    /// Application Support/N250Ride, created on demand.
+    /// Application Support/ClusterNav, created on demand.
     static var standard: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent("N250Ride", isDirectory: true)
+        return base.appendingPathComponent("ClusterNav", isDirectory: true)
     }
 }
