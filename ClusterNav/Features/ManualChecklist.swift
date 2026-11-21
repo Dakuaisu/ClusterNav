@@ -82,7 +82,8 @@ final class ManualChecklist {
                 consoleLog: String) -> String {
         var lines = ["ClusterNav - manual checklist",
                      "App \(appVersion), status packet \(statusProfile?.rawValue ?? "off"), "
-                         + "\(tested(in: sections))/\(sections.flatMap(\.checks).count) tried", ""]
+                         + "\(tested(in: sections))/\(sections.flatMap(\.checks).count) tried",
+                     "Release gate: \(releaseGate(in: sections).passed)/\(releaseGate(in: sections).total) as expected", ""]
         for section in sections {
             lines.append("## \(section.title)")
             for check in section.checks {
@@ -100,7 +101,40 @@ final class ManualChecklist {
     // MARK: Catalogue
 
     static func sections(statusProfile: GeneralStatusProfile) -> [Section] {
-        [navigation(), rerouting(), calls(statusProfile), phoneStatus(statusProfile), alerts(), arrows()]
+        [releaseGate(), navigation(), rerouting(), calls(statusProfile), phoneStatus(statusProfile), alerts(), arrows()]
+    }
+
+    /// How many release-gate checks were observed as expected, of how many.
+    func releaseGate(in sections: [Section]) -> (passed: Int, total: Int) {
+        let gate = sections.flatMap(\.checks).filter { $0.id.hasPrefix("gate.") }
+        return (gate.filter { result($0.id).outcome == .asManual }.count, gate.count)
+    }
+
+    /// Before a build is trusted on the road: what the bike's display really does when
+    /// guidance must stop. Each condition is recorded twice, because an accepted
+    /// Bluetooth write and a visibly cleared arrow are different results.
+    private static func releaseGate() -> Section {
+        func pair(_ id: String, _ title: String, how: String, link: String) -> [Check] {
+            [Check(id: "gate.\(id).link", title: "\(title): what the app reports",
+                   expected: link, howTo: how + " Read the Dashboard line under the turn card on the Ride tab."),
+             Check(id: "gate.\(id).display", title: "\(title): what the dashboard shows",
+                   expected: "The arrow and distance disappear from the bike's display within 10 s.",
+                   howTo: how + " Watch the bike's display, not the phone, and note how many seconds it took.")]
+        }
+        return Section(title: "Release gate (real N250, parked)",
+                       footer: "Run with a live route to a nearby destination, ignition on, engine off. Every row must be As manual before a build is used on the road; note anything else.",
+                       checks: pair("staleGPS", "GPS goes stale",
+                                    how: "Start a ride, then cover the phone or take it indoors until Ride health says the position is old.",
+                                    link: "\"Dashboard clear requested - guidance is stale\" with a delivery status.")
+                           + pair("bluetoothDrop", "Bluetooth drops",
+                                  how: "During a ride, turn the phone's Bluetooth off for 30 s, then on again.",
+                                  link: "\"bike not connected\" while off; guidance is sent again after reconnecting.")
+                           + pair("phoneLock", "Phone locks",
+                                  how: "During a ride, lock the phone for 2 minutes with the route still running.",
+                                  link: "After unlocking: guidance still current, with no clear requested while locked.")
+                           + pair("rideEnd", "Ride ends",
+                                  how: "Tap End ride while a turn is showing.",
+                                  link: "\"Dashboard clear requested - not navigating\" and \"bike acknowledged\"."))
     }
 
     private static let nav = ClusterGATT.navigation

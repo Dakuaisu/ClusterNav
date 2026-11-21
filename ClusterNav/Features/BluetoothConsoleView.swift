@@ -46,7 +46,7 @@ struct BluetoothConsoleView: View {
                 Button {
                     console.send()
                 } label: {
-                    Label("Send", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
+                    Label("Send", systemImage: "paperplane.fill").foregroundStyle(.white).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(console.parsed == nil || model.diagnosticsLocked || !model.bike.state.isReady)
