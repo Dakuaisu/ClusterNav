@@ -74,11 +74,14 @@ struct RideRecapDetailView: View {
         }
         .navigationTitle("Ride recap")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Export this GPS track?", isPresented: $confirmingExport) {
-            Button("Choose where to save") { prepareExport() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The GPX file contains precise recorded coordinates, their timestamps and GPS accuracy. Anyone you share it with can see where and when you travelled.")
+        // The file picker opens only once this sheet has gone: two can't be presented at once.
+        .sheet(isPresented: $confirmingExport, onDismiss: { showingExporter = exportDocument != nil }) {
+            if let track = model.tracks.route(id) {
+                RideRecapExportSheet(track: track) { hideEnds in
+                    confirmingExport = false
+                    prepareExport(hidingEnds: hideEnds)
+                }
+            }
         }
         .confirmationDialog("Delete this recap?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete recap", role: .destructive) {
@@ -112,13 +115,12 @@ struct RideRecapDetailView: View {
             }
     }
 
-    private func prepareExport() {
-        guard let gpx = model.tracks.exportGPX(id) else {
+    private func prepareExport(hidingEnds: Bool) {
+        guard let gpx = model.tracks.exportGPX(id, hidingEnds: hidingEnds) else {
             actionError = "This recap is no longer available to export."
             return
         }
         exportDocument = RideRecapGPXDocument(gpx: gpx)
-        showingExporter = true
     }
 
     private static func status(_ track: RideTrack) -> String {
@@ -129,6 +131,62 @@ struct RideRecapDetailView: View {
     private static func elapsed(_ seconds: TimeInterval) -> String {
         if seconds < 60 { return "\(Int(seconds.rounded())) sec" }
         return Format.duration(seconds)
+    }
+}
+
+/// What exactly will leave the phone, shown before anything is saved.
+private struct RideRecapExportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let track: RideTrack
+    let export: (Bool) -> Void
+    @State private var hideEnds = true
+
+    var body: some View {
+        let shared = hideEnds ? track.hidingEnds() : track
+        let geometry = RideRecapGeometry(track: shared)
+        NavigationStack {
+            List {
+                Section {
+                    Toggle("Hide the start and end", isOn: $hideEnds)
+                        .accessibilityIdentifier("hideEndsToggle")
+                } footer: {
+                    Text("Leaves out every recorded point within \(Int(RideTrack.privacyRadiusMetres)) m of where this recording started and ended, such as your home or workplace.")
+                }
+
+                Section {
+                    if geometry.segments.isEmpty {
+                        Text("Nothing is left to share: the whole ride was within \(Int(RideTrack.privacyRadiusMetres)) m of its start or end.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        RideRecapMap(track: shared, geometry: geometry)
+                    }
+                    LabeledContent("Points in the file", value: "\(shared.pointCount) of \(track.pointCount)")
+                        .accessibilityIdentifier("exportPointCount")
+                } header: {
+                    Text("What will be shared")
+                } footer: {
+                    Text("The file contains these precise coordinates, their timestamps and GPS accuracy. Anyone you share it with can see where and when you travelled. Times are not altered.")
+                }
+
+                Section {
+                    Button {
+                        export(hideEnds)
+                    } label: {
+                        Text("Choose where to save").font(.headline).frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(shared.pointCount == 0)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .accessibilityIdentifier("confirmExportButton")
+                }
+            }
+            .navigationTitle("Export GPX")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
     }
 }
 

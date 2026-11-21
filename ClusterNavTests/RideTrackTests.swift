@@ -276,6 +276,32 @@ struct RideTrackTests {
         #expect(counter.counts["horizontalAccuracy"] == 3)
     }
 
+    @Test func sharingCanLeaveOutEverythingNearTheStartAndEnd() throws {
+        // 3 km north in 100 m steps, with a detour back past the start in the middle.
+        func north(_ metres: Double) -> RideTrackPoint {
+            RideTrackPoint(coordinate: Coordinate(latitude: 12.97 + metres / 110_574, longitude: 77.59)!,
+                           timestamp: start.addingTimeInterval(metres), horizontalAccuracy: 5)
+        }
+        let out = stride(from: 0.0, through: 1_500, by: 100).map(north)
+        let back = [north(300), north(900)]
+        let onward = stride(from: 1_600.0, through: 3_000, by: 100).map(north)
+        let track = RideTrack(id: RideID(), startedAt: start, consentEpoch: "e", endedAt: start, complete: true,
+                              segments: [out + back + onward])
+        let shared = track.hidingEnds()
+        let home = track.segments[0][0].coordinate, destination = track.segments[0].last!.coordinate
+        #expect(shared.segments.flatMap { $0 }.allSatisfy {
+            $0.coordinate.distance(to: home) > 500 && $0.coordinate.distance(to: destination) > 500
+        })
+        #expect(shared.segments.map(\.count) == [11, 11], "the pass back near the start is removed and leaves a gap")
+        #expect(shared.pointCount < track.pointCount && track.pointCount == 33, "the stored track is untouched")
+        #expect(!shared.gpx.contains("lat=\"12.97\""), "the starting point is not in the file")
+        #expect(shared.gpx.components(separatedBy: "<trkseg>").count == 3)
+
+        let short = RideTrack(id: RideID(), startedAt: start, consentEpoch: "e", endedAt: start, complete: true,
+                              segments: [[north(0), north(200), north(400)]])
+        #expect(short.hidingEnds().pointCount == 0, "a ride that never left the area shares nothing")
+    }
+
     @Test func recapGeometryMeasuresWithinSegmentsAndFitsEveryPoint() throws {
         let north = try #require(Coordinate(latitude: 12.98, longitude: 77.59))
         let east = try #require(Coordinate(latitude: 12.98, longitude: 77.61))

@@ -17,6 +17,35 @@ struct RideTrack: Codable, Identifiable, Equatable, Sendable {
     var complete: Bool
     var segments: [[RideTrackPoint]]
     var pointCount: Int { segments.reduce(0) { $0 + $1.count } }
+
+    static let privacyRadiusMetres = 500.0
+
+    /// A copy for sharing without every point within `radius` of where the recording
+    /// started and ended, so the two places themselves are not in the file. A removed
+    /// stretch leaves a gap; what remains on either side of it is never joined.
+    func hidingEnds(within radius: Double = RideTrack.privacyRadiusMetres) -> RideTrack {
+        let points = segments.flatMap { $0 }
+        guard let first = points.first?.coordinate, let last = points.last?.coordinate else { return self }
+        var shared = self
+        shared.segments = segments.flatMap { segment in
+            segment.split { $0.coordinate.distance(to: first) <= radius || $0.coordinate.distance(to: last) <= radius }
+                .map(Array.init)
+        }
+        return shared
+    }
+
+    /// GPX 1.1 keeps segment boundaries and the original measurement time and accuracy.
+    var gpx: String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let body = segments.filter { !$0.isEmpty }.map { segment in
+            let points = segment.map { point in
+                "<trkpt lat=\"\(point.coordinate.latitude)\" lon=\"\(point.coordinate.longitude)\"><time>\(formatter.string(from: point.timestamp))</time><extensions><pv:horizontalAccuracy>\(point.horizontalAccuracy)</pv:horizontalAccuracy></extensions></trkpt>"
+            }.joined()
+            return "<trkseg>\(points)</trkseg>"
+        }.joined()
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"ClusterNav\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:pv=\"urn:clusternav:gpx:1\"><trk>\(body)</trk></gpx>"
+    }
 }
 
 struct RideTrackMetadata: Codable, Identifiable, Equatable {
@@ -295,18 +324,9 @@ final class RideTrackStore {
         return true
     }
 
-    /// GPX 1.1 keeps segment boundaries and the original measurement time and accuracy.
-    func exportGPX(_ id: RideID) -> String? {
+    func exportGPX(_ id: RideID, hidingEnds: Bool = false) -> String? {
         guard let track = route(id) else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let segments = track.segments.filter { !$0.isEmpty }.map { segment in
-            let points = segment.map { point in
-                "<trkpt lat=\"\(point.coordinate.latitude)\" lon=\"\(point.coordinate.longitude)\"><time>\(formatter.string(from: point.timestamp))</time><extensions><pv:horizontalAccuracy>\(point.horizontalAccuracy)</pv:horizontalAccuracy></extensions></trkpt>"
-            }.joined()
-            return "<trkseg>\(points)</trkseg>"
-        }.joined()
-        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><gpx version=\"1.1\" creator=\"ClusterNav\" xmlns=\"http://www.topografix.com/GPX/1/1\" xmlns:pv=\"urn:clusternav:gpx:1\"><trk>\(segments)</trk></gpx>"
+        return (hidingEnds ? track.hidingEnds() : track).gpx
     }
 
     private func trackFile(_ id: RideID) -> RecordFile<RideTrack> {
